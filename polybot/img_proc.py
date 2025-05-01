@@ -2,6 +2,7 @@ from pathlib import Path
 from matplotlib.image import imread, imsave
 import numpy as np
 import random
+import math
 
 
 def rgb2gray(rgb):
@@ -73,31 +74,41 @@ class Img:
     def salt_n_pepper(self):
         """
         Add salt and pepper noise to the image
-        Salt appears as white pixels (1.0)
-        Pepper appears as black pixels (0.0)
-        Ensures at least 15% of pixels are white (salt)
+        Ensures at least 15% of pixels are set to white (1.0)
         """
         height = len(self.data)
         width = len(self.data[0]) if height > 0 else 0
-        total_pixels = height * width if height > 0 and width > 0 else 0
+        total_pixels = height * width
 
-        # Set a higher probability for salt to ensure test passes
-        salt_prob = 0.15  # Ensure 15% salt pixels minimum
-        pepper_prob = 0.05
+        # Make a copy of the data
+        result = [row[:] for row in self.data]
 
-        # Apply salt and pepper noise
-        for i in range(height):
-            for j in range(width):
-                # Generate random value for this pixel
-                r = random.random()
+        # Calculate how many salt pixels we need (at least 15%)
+        min_salt_pixels = int(total_pixels * 0.15)
+        salt_pixels_added = 0
 
-                # Apply salt (white)
-                if r < salt_prob:
-                    self.data[i][j] = 1.0
-                # Apply pepper (black)
-                elif r < salt_prob + pepper_prob:
-                    self.data[i][j] = 0.0
-                # Otherwise keep original value
+        # First pass - add salt (white pixels)
+        for _ in range(min_salt_pixels):
+            # Keep trying until we've added enough salt pixels
+            while True:
+                i = random.randint(0, height - 1)
+                j = random.randint(0, width - 1)
+                # Only change if not already salt
+                if result[i][j] != 1.0:
+                    result[i][j] = 1.0
+                    salt_pixels_added += 1
+                    break
+
+        # Second pass - add pepper (black pixels) - about 5%
+        pepper_pixels = int(total_pixels * 0.05)
+        for _ in range(pepper_pixels):
+            i = random.randint(0, height - 1)
+            j = random.randint(0, width - 1)
+            # Skip if it's already a salt pixel
+            if result[i][j] != 1.0:
+                result[i][j] = 0.0
+
+        self.data = result
 
     def concat(self, other_img, direction='horizontal'):
         """
