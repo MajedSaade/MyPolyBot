@@ -1,27 +1,25 @@
-import flask
-from flask import request
 import os
-from bot import Bot, QuoteBot, ImageProcessingBot
+import asyncio
+from dotenv import load_dotenv
+from bot import ImageProcessingBot
+from loguru import logger
 
-app = flask.Flask(__name__)
+# Load environment variables from .env file
+load_dotenv()
 
-TELEGRAM_BOT_TOKEN = os.environ['TELEGRAM_BOT_TOKEN']
-BOT_APP_URL = os.environ['BOT_APP_URL']
+# Get the token from .env
+DISCORD_BOT_TOKEN = os.environ.get('DISCORD_BOT_TOKEN')
 
+async def main():
+    if not DISCORD_BOT_TOKEN:
+        logger.error("DISCORD_BOT_TOKEN environment variable not set")
+        return
 
-@app.route('/', methods=['GET'])
-def index():
-    return 'Ok'
+    # Use ImageProcessingBot (make sure bot.py has the correct class)
+    bot = ImageProcessingBot(DISCORD_BOT_TOKEN)
 
-
-@app.route(f'/{TELEGRAM_BOT_TOKEN}/', methods=['POST'])
-def webhook():
-    req = request.get_json()
-    bot.handle_message(req['message'])
-    return 'Ok'
-
+    logger.info("Starting Discord bot...")
+    await bot.start()
 
 if __name__ == "__main__":
-    bot = Bot(TELEGRAM_BOT_TOKEN, TELEGRAM_APP_URL)
-
-    app.run(host='0.0.0.0', port=8443)
+    asyncio.run(main())
