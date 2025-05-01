@@ -80,30 +80,50 @@ class Img:
         width = len(self.data[0]) if height > 0 else 0
         total_pixels = height * width
 
-        # Calculate how many salt pixels we need (at least 15%)
-        min_salt_pixels = int(total_pixels * 0.15)
+        # Create a new matrix for the result with a deep copy of the data
+        result = [[self.data[i][j] for j in range(width)] for i in range(height)]
 
-        # Make a copy of the data to avoid modifying during iteration
-        result = [row[:] for row in self.data]
+        # Explicitly calculate the number of salt (white) pixels needed - at least 15%
+        min_salt_pixels = math.ceil(total_pixels * 0.15)
 
-        # Add salt (white pixels)
-        salt_pixels_added = 0
-        while salt_pixels_added < min_salt_pixels:
-            i = random.randint(0, height - 1)
-            j = random.randint(0, width - 1)
-            # Only change if not already salt
-            if result[i][j] != 1.0:
-                result[i][j] = 1.0
-                salt_pixels_added += 1
+        # First, create a list of all pixel positions
+        all_positions = [(i, j) for i in range(height) for j in range(width)]
 
-        # Add pepper (black pixels) - about 5%
+        # Shuffle the positions randomly
+        random.shuffle(all_positions)
+
+        # Use the first min_salt_pixels positions for salt
+        salt_count = 0
+        salt_index = 0
+
+        # Keep selecting positions until we've added enough salt
+        while salt_count < min_salt_pixels and salt_index < len(all_positions):
+            i, j = all_positions[salt_index]
+            # Set to exactly 1.0 to ensure test recognizes it as white
+            result[i][j] = 1.0
+            salt_count += 1
+            salt_index += 1
+
+        # For the next 5% of pixels, add pepper (black) as long as they're not already salt
         pepper_pixels = int(total_pixels * 0.05)
-        for _ in range(pepper_pixels):
-            i = random.randint(0, height - 1)
-            j = random.randint(0, width - 1)
-            # Skip if it's already a salt pixel
-            if result[i][j] != 1.0:
-                result[i][j] = 0.0
+        pepper_count = 0
+        pepper_index = salt_index  # Start from where salt ended
+
+        while pepper_count < pepper_pixels and pepper_index < len(all_positions):
+            i, j = all_positions[pepper_index]
+            # Set to exactly 0.0 for black
+            result[i][j] = 0.0
+            pepper_count += 1
+            pepper_index += 1
+
+        # Verify we actually added enough salt pixels
+        actual_salt = sum(row.count(1.0) for row in result)
+        if actual_salt < min_salt_pixels:
+            # Force more pixels to be white if needed
+            remaining_positions = all_positions[pepper_index:]
+            random.shuffle(remaining_positions)
+            for i, j in remaining_positions[:min_salt_pixels - actual_salt]:
+                result[i][j] = 1.0
 
         self.data = result
 
