@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from bot import ImageProcessingBot
 from loguru import logger
 
-# Load environment variables from .env file
+# Load environment variables from .env files
 load_dotenv()
 
 # Get the token from .env
