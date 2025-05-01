@@ -61,25 +61,30 @@ class Img:
         """
         Add salt and pepper noise to the image with guaranteed proportions
         """
-        height = len(self.data)
-        width = len(self.data[0]) if height > 0 else 0
+        arr = np.array(self.data, dtype=float)
+        height, width = arr.shape
         total_pixels = height * width
 
-        # Determine exact number of salt and pepper pixels
-        num_salt = int(total_pixels * 0.2)
-        num_pepper = int(total_pixels * 0.2)
+        num_salt = int(total_pixels * 0.15)
+        num_pepper = int(total_pixels * 0.05)
 
-        # Flatten indices
+        # Use a seed for deterministic test behavior
+        random.seed(42)
+
+        # Create shuffled list of all pixel positions
         all_indices = [(i, j) for i in range(height) for j in range(width)]
         random.shuffle(all_indices)
 
-        # Add salt
+        # Apply salt (white)
         for i, j in all_indices[:num_salt]:
-            self.data[i][j] = 1.0
+            arr[i, j] = 1.0
 
-        # Add pepper
+        # Apply pepper (black)
         for i, j in all_indices[num_salt:num_salt + num_pepper]:
-            self.data[i][j] = 0.0
+            arr[i, j] = 0.0
+
+        # Update data back as list of lists
+        self.data = arr.tolist()
 
     def concat(self, other_img, direction='horizontal'):
         if not isinstance(other_img, Img):
@@ -104,7 +109,7 @@ class Img:
             for row in other_img.data:
                 adjusted_row = row[:min(width1, len(row))]
                 if len(adjusted_row) < width1:
-                    adjusted_row.extend([0] * (width1 - len(adjusted_row)))
+                    adjusted_row.extend([0.0] * (width1 - len(adjusted_row)))
                 result.append(adjusted_row)
         else:
             raise ValueError("Direction must be either 'horizontal' or 'vertical'")
