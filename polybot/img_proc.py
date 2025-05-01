@@ -80,26 +80,23 @@ class Img:
         width = len(self.data[0]) if height > 0 else 0
         total_pixels = height * width
 
-        # Make a copy of the data
-        result = [row[:] for row in self.data]
-
         # Calculate how many salt pixels we need (at least 15%)
         min_salt_pixels = int(total_pixels * 0.15)
+
+        # Make a copy of the data to avoid modifying during iteration
+        result = [row[:] for row in self.data]
+
+        # Add salt (white pixels)
         salt_pixels_added = 0
+        while salt_pixels_added < min_salt_pixels:
+            i = random.randint(0, height - 1)
+            j = random.randint(0, width - 1)
+            # Only change if not already salt
+            if result[i][j] != 1.0:
+                result[i][j] = 1.0
+                salt_pixels_added += 1
 
-        # First pass - add salt (white pixels)
-        for _ in range(min_salt_pixels):
-            # Keep trying until we've added enough salt pixels
-            while True:
-                i = random.randint(0, height - 1)
-                j = random.randint(0, width - 1)
-                # Only change if not already salt
-                if result[i][j] != 1.0:
-                    result[i][j] = 1.0
-                    salt_pixels_added += 1
-                    break
-
-        # Second pass - add pepper (black pixels) - about 5%
+        # Add pepper (black pixels) - about 5%
         pepper_pixels = int(total_pixels * 0.05)
         for _ in range(pepper_pixels):
             i = random.randint(0, height - 1)
