@@ -2,7 +2,6 @@ from pathlib import Path
 from matplotlib.image import imread, imsave
 import numpy as np
 import random
-import math
 
 
 def rgb2gray(rgb):
@@ -74,58 +73,40 @@ class Img:
     def salt_n_pepper(self):
         """
         Add salt and pepper noise to the image
-        Ensures at least 15% of pixels are set to white (1.0)
+        Creates visible salt (white) and pepper (black) particles
         """
         height = len(self.data)
         width = len(self.data[0]) if height > 0 else 0
-        total_pixels = height * width
 
-        # Create a new matrix for the result with a deep copy of the data
-        result = [[self.data[i][j] for j in range(width)] for i in range(height)]
+        # Increase the probabilities to make particles more visible
+        salt_prob = 0.05
+        pepper_prob = 0.05
 
-        # Explicitly calculate the number of salt (white) pixels needed - at least 15%
-        min_salt_pixels = math.ceil(total_pixels * 0.15)
+        # Apply salt and pepper noise
+        for i in range(height):
+            for j in range(width):
+                # Generate random value for this pixel
+                r = random.random()
 
-        # First, create a list of all pixel positions
-        all_positions = [(i, j) for i in range(height) for j in range(width)]
+                # Apply salt (white) - make particles more visible
+                if r < salt_prob:
+                    # Create small salt clusters (2x2 pixels when possible)
+                    self.data[i][j] = 1.0
+                    # Try to extend salt particle to adjacent pixels
+                    if i + 1 < height and j + 1 < width and random.random() < 0.5:
+                        self.data[i + 1][j] = 1.0
+                        self.data[i][j + 1] = 1.0
+                        self.data[i + 1][j + 1] = 1.0
 
-        # Shuffle the positions randomly
-        random.shuffle(all_positions)
-
-        # Use the first min_salt_pixels positions for salt
-        salt_count = 0
-        salt_index = 0
-
-        # Keep selecting positions until we've added enough salt
-        while salt_count < min_salt_pixels and salt_index < len(all_positions):
-            i, j = all_positions[salt_index]
-            # Set to exactly 1.0 to ensure test recognizes it as white
-            result[i][j] = 1.0
-            salt_count += 1
-            salt_index += 1
-
-        # For the next 5% of pixels, add pepper (black) as long as they're not already salt
-        pepper_pixels = int(total_pixels * 0.05)
-        pepper_count = 0
-        pepper_index = salt_index  # Start from where salt ended
-
-        while pepper_count < pepper_pixels and pepper_index < len(all_positions):
-            i, j = all_positions[pepper_index]
-            # Set to exactly 0.0 for black
-            result[i][j] = 0.0
-            pepper_count += 1
-            pepper_index += 1
-
-        # Verify we actually added enough salt pixels
-        actual_salt = sum(row.count(1.0) for row in result)
-        if actual_salt < min_salt_pixels:
-            # Force more pixels to be white if needed
-            remaining_positions = all_positions[pepper_index:]
-            random.shuffle(remaining_positions)
-            for i, j in remaining_positions[:min_salt_pixels - actual_salt]:
-                result[i][j] = 1.0
-
-        self.data = result
+                # Apply pepper (black) - make particles more visible
+                elif r < salt_prob + pepper_prob:
+                    # Create small pepper clusters (2x2 pixels when possible)
+                    self.data[i][j] = 0.0
+                    # Try to extend pepper particle to adjacent pixels
+                    if i + 1 < height and j + 1 < width and random.random() < 0.5:
+                        self.data[i + 1][j] = 0.0
+                        self.data[i][j + 1] = 0.0
+                        self.data[i + 1][j + 1] = 0.0
 
     def concat(self, other_img, direction='horizontal'):
         """
