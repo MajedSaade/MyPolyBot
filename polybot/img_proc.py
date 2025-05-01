@@ -66,8 +66,8 @@ class Img:
         total_pixels = height * width
 
         # Determine exact number of salt and pepper pixels
-        num_salt = int(total_pixels * 0.15)
-        num_pepper = int(total_pixels * 0.05)
+        num_salt = int(total_pixels * 0.2)
+        num_pepper = int(total_pixels * 0.2)
 
         # Flatten indices
         all_indices = [(i, j) for i in range(height) for j in range(width)]
