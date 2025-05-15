@@ -1,0 +1,47 @@
+name: Deploy Polybot
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: SSH Deploy to EC2
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deploy to EC2 instance
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_KEY }}
+          script: |
+            echo "Starting Polybot deployment..."
+
+            # Clone or pull repo
+            if [ -d "${{ secrets.DEPLOY_PATH }}" ]; then
+              cd ${{ secrets.DEPLOY_PATH }}
+              git pull
+            else
+              git clone https://github.com/MajedSaade/PolybotService.git ${{ secrets.DEPLOY_PATH }}
+              cd ${{ secrets.DEPLOY_PATH }}
+            fi
+
+            # Activate venv if it exists
+            if [ -f ".venv/bin/activate" ]; then
+              source .venv/bin/activate
+            else
+              python3 -m venv .venv
+              source .venv/bin/activate
+              pip install -r requirements.txt
+            fi
+
+            # Restart the service
+            sudo systemctl restart polybot.service
+
+            echo "✅ Polybot deployment complete."
