@@ -4,44 +4,40 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+
+env:
+  REPO_URL: https://github.com/MajedSaade/PolybotService.git
 
 jobs:
   deploy:
-    name: SSH Deploy to EC2
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Deploy to EC2 instance
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_KEY }}
-          script: |
-            echo "Starting Polybot deployment..."
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_HOST: ${{ secrets.POLYBOT_EC2_HOST }}
+          EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/private_key
+          chmod 600 ~/.ssh/private_key
+          cat > ~/.ssh/config << EOF
+          Host poly
+              HostName $EC2_HOST
+              User $EC2_USERNAME
+              IdentityFile ~/.ssh/private_key
+              StrictHostKeyChecking no
+          EOF
 
-            # Clone or pull repo
-            if [ -d "${{ secrets.DEPLOY_PATH }}" ]; then
-              cd ${{ secrets.DEPLOY_PATH }}
-              git pull
-            else
-              git clone https://github.com/MajedSaade/PolybotService.git ${{ secrets.DEPLOY_PATH }}
-              cd ${{ secrets.DEPLOY_PATH }}
-            fi
+      - name: Clone or Pull Code on EC2
+        run: |
+          ssh poly "if [ -d ~/PolybotServiceFursa ]; then cd ~/PolybotServiceFursa && git pull; else git clone ${REPO_URL} ~/PolybotServiceFursa; fi"
 
-            # Activate venv if it exists
-            if [ -f ".venv/bin/activate" ]; then
-              source .venv/bin/activate
-            else
-              python3 -m venv .venv
-              source .venv/bin/activate
-              pip install -r requirements.txt
-            fi
-
-            # Restart the service
-            sudo systemctl restart polybot.service
-
-            echo "✅ Polybot deployment complete."
+      - name: Run Deployment Script on EC2
+        run: |
+          ssh poly "cd ~/PolybotServiceFursa && bash deploy.sh"
