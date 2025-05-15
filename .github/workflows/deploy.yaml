@@ -29,16 +29,20 @@ jobs:
           chmod 600 ~/.ssh/private_key
           cat > ~/.ssh/config << EOF
           Host poly
-              HostName $EC2_HOST
-              User $EC2_USERNAME
-              IdentityFile ~/.ssh/private_key
-              StrictHostKeyChecking no
+            HostName $EC2_HOST
+            User $EC2_USERNAME
+            IdentityFile ~/.ssh/private_key
+            StrictHostKeyChecking no
           EOF
 
       - name: Clone or Pull Code on EC2
         run: |
-          ssh poly "if [ -d ~/PolybotServiceFursa ]; then cd ~/PolybotServiceFursa && git pull; else git clone ${REPO_URL} ~/PolybotServiceFursa; fi"
+          ssh poly "if [ -d ~/${REPO_NAME} ]; then 
+                    cd ~/${REPO_NAME} && git pull; 
+                  else 
+                    GIT_TERMINAL_PROMPT=0 git clone ${REPO_URL} ~/${REPO_NAME}; 
+                  fi"
 
       - name: Run Deployment Script on EC2
         run: |
-          ssh poly "cd ~/PolybotServiceFursa && bash deploy.sh"
+          ssh poly "cd ~/${REPO_NAME} && bash deploy.sh"
