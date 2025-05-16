@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 env:
-  REPO_URL: git://github.com/MajedSaade/PolybotService.git
+  REPO_URL: https://github.com/MajedSaade/PolybotService.git
   REPO_NAME: PolybotService
 
 jobs:
@@ -17,6 +17,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          repository: MajedSaade/PolybotService
+          path: ${REPO_NAME}
 
       - name: Configure SSH
         env:
@@ -35,13 +38,9 @@ jobs:
             StrictHostKeyChecking no
           EOF
 
-      - name: Clone or Pull Code on EC2
+      - name: Sync Code to EC2
         run: |
-          ssh poly "if [ -d ~/${REPO_NAME} ]; then 
-                    cd ~/${REPO_NAME} && git pull; 
-                  else 
-                    git clone ${REPO_URL} ~/${REPO_NAME}; 
-                  fi"
+          rsync -avz --delete ${REPO_NAME}/ poly:~/${REPO_NAME}/
 
       - name: Run Deployment Script on EC2
         run: |
