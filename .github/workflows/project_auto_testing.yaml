@@ -22,6 +22,7 @@ jobs:
           source venv/bin/activate
           pip install --upgrade pip
           pip install -r polybot/requirements.txt
+          pip install matplotlib
 
       - name: Test Filters
         run: |
