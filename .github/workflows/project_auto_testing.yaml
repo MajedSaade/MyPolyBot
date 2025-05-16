@@ -26,6 +26,7 @@ jobs:
 
       - name: Test Filters
         run: |
+          source venv/bin/activate
           echo -e "\n✅ Testing concat()"
           python -m polybot.test.test_concat
 
