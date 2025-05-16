@@ -7,8 +7,8 @@ on:
   workflow_dispatch:
 
 env:
-  REPO_URL: https://github.com/MajedSaade/PolybotService.git
-  REPO_NAME: PolybotService
+  REPO_URL: https://github.com/MajedSaade/MyPolyBot.git
+  REPO_NAME: MyPolyBot
 
 jobs:
   deploy:
