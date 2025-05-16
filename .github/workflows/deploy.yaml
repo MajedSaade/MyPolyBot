@@ -17,9 +17,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          repository: MajedSaade/PolybotService
-          path: ${REPO_NAME}
 
       - name: Configure SSH
         env:
@@ -38,9 +35,13 @@ jobs:
             StrictHostKeyChecking no
           EOF
 
-      - name: Sync Code to EC2
+      - name: Clone or Pull Code on EC2
         run: |
-          rsync -avz --delete ${REPO_NAME}/ poly:~/${REPO_NAME}/
+          ssh poly "if [ -d ~/${REPO_NAME} ]; then 
+                    cd ~/${REPO_NAME} && git pull; 
+                  else 
+                    GIT_TERMINAL_PROMPT=0 git clone ${REPO_URL} ~/${REPO_NAME}; 
+                  fi"
 
       - name: Run Deployment Script on EC2
         run: |
