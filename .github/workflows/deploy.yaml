@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 env:
-  REPO_URL: https://github.com/MajedSaade/PolybotService.git
+  REPO_URL: git://github.com/MajedSaade/PolybotService.git
   REPO_NAME: PolybotService
 
 jobs:
@@ -40,7 +40,7 @@ jobs:
           ssh poly "if [ -d ~/${REPO_NAME} ]; then 
                     cd ~/${REPO_NAME} && git pull; 
                   else 
-                    GIT_TERMINAL_PROMPT=0 git clone ${REPO_URL} ~/${REPO_NAME}; 
+                    git clone ${REPO_URL} ~/${REPO_NAME}; 
                   fi"
 
       - name: Run Deployment Script on EC2
