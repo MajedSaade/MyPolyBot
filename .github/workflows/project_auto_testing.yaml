@@ -43,4 +43,4 @@ jobs:
         run: |
           source venv/bin/activate
           echo -e "\n✅ Testing Discord Bot"
-          python -m polybot.test.test_discord_bot
+          python -m polybot.test.test_telegram_bot
