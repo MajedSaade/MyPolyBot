@@ -1,38 +1,46 @@
 name: Project auto-testing
+
 on:
   push:
     branches:
       - main
+      - feature/**
 
 permissions: {}
 
 jobs:
   TestImgProcessingChatbotApp:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/checkout@v2
-        with:
-          repository: alonitac/ImageProcessingChatBotProject
-          path: ImageProcessingChatBotProjectOriginal
-      - name: Copy test files
-        run: mv -f ImageProcessingChatBotProjectOriginal/polybot/test/* polybot/test/
-      - name: Install dependencies
+      - name: Checkout Your Code
+        uses: actions/checkout@v2
+
+      - name: Install Dependencies
         run: |
+          python -m venv venv
+          source venv/bin/activate
+          pip install --upgrade pip
+          pip install matplotlib
           pip install -r polybot/requirements.txt
-      - name: Test filters
+
+      - name: Test Filters
         run: |
-          echo -e "\n\nTesting concat()\n"
+          source venv/bin/activate
+          echo -e "\n✅ Testing concat()"
           python -m polybot.test.test_concat
-          
-          echo -e "\n\nTesting rotate()\n"
+
+          echo -e "\n✅ Testing rotate()"
           python -m polybot.test.test_rotate
-          
-          echo -e "\n\nTesting salt_n_pepper()\n"
+
+          echo -e "\n✅ Testing salt_n_pepper()"
           python -m polybot.test.test_salt_n_pepper
-          
-          echo -e "\n\nTesting segment()\n"
+
+          echo -e "\n✅ Testing segment()"
           python -m polybot.test.test_segment
-      - name: Test bot
+
+      - name: Test Discord Bot
         run: |
+          source venv/bin/activate
+          echo -e "\n✅ Testing Discord Bot"
           python -m polybot.test.test_telegram_bot

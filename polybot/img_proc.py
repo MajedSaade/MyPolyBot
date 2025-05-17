@@ -1,4 +1,5 @@
 from pathlib import Path
+import matplotlib
 from matplotlib.image import imread, imsave
 import numpy as np
 import random
