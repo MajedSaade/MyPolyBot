@@ -13,6 +13,8 @@ load_dotenv()
 # Get the token from .env
 DISCORD_BOT_TOKEN = os.environ.get('DISCORD_BOT_TOKEN')
 YOLO_URL = os.environ.get('YOLO_URL', 'http://10.0.1.90:8081/predict')
+OLLAMA_URL = os.environ.get('OLLAMA_URL', 'http://localhost:11434/api/chat')
+OLLAMA_MODEL = os.environ.get('OLLAMA_MODEL', 'gemma3:1b')
 STATUS_SERVER_PORT = int(os.environ.get('STATUS_SERVER_PORT', 8443))
 
 # Create FastAPI app for health checks
@@ -43,8 +45,8 @@ async def main():
     status_thread.start()
     logger.info("Status server thread started")
 
-    # Use ImageProcessingBot with YOLO URL
-    bot = ImageProcessingBot(DISCORD_BOT_TOKEN, YOLO_URL)
+    # Use ImageProcessingBot with YOLO URL and Ollama URL
+    bot = ImageProcessingBot(DISCORD_BOT_TOKEN, YOLO_URL, OLLAMA_URL)
     logger.info("Starting Discord bot...")
 
     try:

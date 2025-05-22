@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+from discord.ext.commands import Bot
 from loguru import logger
 import os
 import time
@@ -8,6 +9,8 @@ import re
 import requests
 from pathlib import Path
 from polybot.img_proc import Img
+import json
+
 
 class Bot:
     def __init__(self, token):
@@ -17,10 +20,12 @@ class Bot:
         # Create a Discord bot client
         self.client = commands.Bot(command_prefix='!', intents=intents)
         self.token = token
+
         # Set up event handlers
         @self.client.event
         async def on_ready():
             logger.info(f'Discord Bot logged in as {self.client.user}')
+
         @self.client.event
         async def on_message(message):
             # Avoid responding to own messages
@@ -31,14 +36,17 @@ class Bot:
             # Default message handler
             if not message.content.startswith('!'):
                 await self.handle_message(message)
+
     async def start(self):
         """Start the Discord bot"""
         await self.client.start(self.token)
+
     async def send_text(self, channel_id, text):
         """Send a text message to a channel"""
         channel = self.client.get_channel(channel_id)
         if channel:
             await channel.send(text)
+
     async def send_text_with_quote(self, channel_id, text, quoted_msg_id):
         """Send a text message with a quote reference"""
         channel = self.client.get_channel(channel_id)
@@ -50,13 +58,15 @@ class Bot:
             except discord.NotFound:
                 # Message not found, send without quote
                 await channel.send(text)
+
     def is_current_msg_photo(self, message):
         """Check if message contains a photo"""
         return len(message.attachments) > 0 and message.attachments[0].content_type.startswith('image/')
+
     async def download_user_photo(self, message):
         """Download photo from a message"""
         if not self.is_current_msg_photo(message):
-            raise RuntimeError(f'Message content of type \'photo\' expected')
+            raise RuntimeError(f'Message content of type photo expected')
         attachment = message.attachments[0]
         folder_name = 'photos'
         if not os.path.exists(folder_name):
@@ -64,6 +74,7 @@ class Bot:
         file_path = f"{folder_name}/{attachment.filename}"
         await attachment.save(file_path)
         return file_path
+
     async def send_photo(self, channel_id, img_path):
         """Send a photo to a channel"""
         if not os.path.exists(img_path):
@@ -71,12 +82,14 @@ class Bot:
         channel = self.client.get_channel(channel_id)
         if channel:
             await channel.send(file=discord.File(img_path))
+
     async def handle_message(self, message):
         """Bot Main message handler with expanded conversational abilities"""
         logger.info(f'Incoming message: {message.content}')
         # Convert message to lowercase for easier matching
         content = message.content.lower()
         username = message.author.name
+
         # GREETINGS
         greetings = ["hi", "hello", "hey", "hola", "greetings", "sup", "yo", "howdy",
                      "hi there", "hello there", "heya", "hiya", "good morning",
@@ -96,6 +109,7 @@ class Bot:
             ]
             await message.channel.send(random.choice(greeting_responses))
             return
+
         # HOW ARE YOU and FEELINGS
         how_are_you_patterns = [
             r"how are you", r"how('s| is) it going", r"how are you doing",
@@ -117,6 +131,7 @@ class Bot:
             ]
             await message.channel.send(random.choice(feeling_responses))
             return
+
         # USER FEELING GOOD
         feeling_good_patterns = [
             r"(i('m| am)|feeling) (good|great|excellent|fantastic|amazing|wonderful|happy)",
@@ -136,6 +151,7 @@ class Bot:
             ]
             await message.channel.send(random.choice(positive_responses))
             return
+
         # USER FEELING BAD
         feeling_bad_patterns = [
             r"(i('m| am)|feeling) (bad|sad|depressed|unhappy|tired|exhausted|sick)",
@@ -154,6 +170,7 @@ class Bot:
             ]
             await message.channel.send(random.choice(sympathy_responses))
             return
+
         # THANK YOU
         thanks_patterns = [
             r"thank you", r"thanks", r"thx", r"thank u", r"appreciate it",
@@ -173,6 +190,7 @@ class Bot:
             ]
             await message.channel.send(random.choice(gratitude_responses))
             return
+
         # GOODBYE
         goodbye_patterns = [
             r"^bye$", r"goodbye", r"see you", r"cya", r"later", r"good night",
@@ -192,6 +210,7 @@ class Bot:
             ]
             await message.channel.send(random.choice(farewell_responses))
             return
+
         # JOKES
         joke_patterns = [
             r"tell (me )?(a )?joke", r"(got|know) (any )?jokes",
@@ -216,6 +235,7 @@ class Bot:
             ]
             await message.channel.send(random.choice(jokes))
             return
+
         # COMPLIMENTS
         if re.search(
                 r"(you('re| are)|your) (great|awesome|amazing|helpful|excellent|wonderful|fantastic|good|smart|clever)",
@@ -231,6 +251,7 @@ class Bot:
             ]
             await message.channel.send(random.choice(compliment_responses))
             return
+
         # TIME/DATE
         if re.search(r"what (time|day|date) is it", content) or re.search(r"what('s| is) the (time|date)", content):
             from datetime import datetime
@@ -239,6 +260,7 @@ class Bot:
             time_str = now.strftime("%I:%M %p")
             await message.channel.send(f"It's currently {time_str} on {date_str}.")
             return
+
         # WEATHER (simulate since we don't have an API)
         if re.search(r"(how('s| is) the )?weather", content):
             weather_responses = [
@@ -249,6 +271,7 @@ class Bot:
             ]
             await message.channel.send(random.choice(weather_responses))
             return
+
         # HELP COMMANDS
         if re.search(r"help|commands|what can you do|how (do|to) (use|work)|(show|list) commands", content):
             help_message = (
@@ -259,13 +282,15 @@ class Bot:
                 "• `!salt_pepper` - Add noise to an image\n"
                 "• `!segment` - Convert image to black & white\n"
                 "• `!detect` - Detect objects in an image using YOLO\n"
-                "• `!concat [horizontal|vertical]` - Join two images\n\n"
-                "For commands except `!concat`, attach an image to your message.\n"
+                "• `!concat [horizontal|vertical]` - Join two images\n"
+                "• `!ask [question]` - Ask the AI a question using Ollama\n\n"
+                "For commands except `!concat` and `!ask`, attach an image to your message.\n"
                 "For `!concat`, the bot will use the two most recent images in the channel.\n\n"
                 "You can also just chat with me! I respond to greetings, questions about how I'm doing, jokes, and more!"
             )
             await message.channel.send(help_message)
             return
+
         # ABOUT/WHO ARE YOU
         if re.search(r"about|who are you|what are you|tell me about yourself", content):
             about_message = (
@@ -273,12 +298,14 @@ class Bot:
                 "I can help you apply various effects and transformations to your images. "
                 "Upload an image with one of my commands, and I'll process it for you.\n\n"
                 "I can also detect objects in your images using the YOLO model!\n\n"
+                "With my Ollama integration, I can answer questions using AI models!\n\n"
                 "I can also chat with you about your day, tell jokes, and "
                 "try to be a helpful companion for all your image processing needs!\n\n"
                 "Type `help` or use the `!help` command to see what I can do!"
             )
             await message.channel.send(about_message)
             return
+
         # FAVORITE COLOR
         if re.search(r"(what('s| is)|tell me) your favorite color", content):
             color_responses = [
@@ -289,6 +316,7 @@ class Bot:
             ]
             await message.channel.send(random.choice(color_responses))
             return
+
         # FAVORITE IMAGE/PHOTO
         if re.search(r"(what('s| is)|tell me) your favorite (image|photo|picture)", content):
             image_responses = [
@@ -299,6 +327,7 @@ class Bot:
             ]
             await message.channel.send(random.choice(image_responses))
             return
+
         # DEFAULT RESPONSE
         default_responses = [
             f"I'm not sure how to respond to that. Would you like to try processing an image?",
@@ -309,39 +338,59 @@ class Bot:
         ]
         await message.channel.send(random.choice(default_responses))
 
+
 class QuoteBot(Bot):
     async def handle_message(self, message):
         """Quote bot message handler"""
         logger.info(f'Incoming message: {message.content}')
-        if message.content != 'Please don\'t quote me':
+        if message.content != 'Please dont quote me':
             await message.reply(message.content)
 
+
 class ImageProcessingBot(Bot):
-    def __init__(self, token, yolo_url=None):
+    def __init__(self, token, yolo_url=None, ollama_url=None):
         super().__init__(token)
         # Define the YOLO service URL - can be overridden in environment variables
         self.yolo_url = yolo_url or os.environ.get('YOLO_URL', 'http://10.0.1.90:8081/predict')
         logger.info(f"YOLO service URL set to: {self.yolo_url}")
+
+        # Define the Ollama service URL - can be overridden in environment variables
+        self.ollama_url = ollama_url or os.environ.get('OLLAMA_URL', 'http://localhost:11434/api/chat')
+        self.ollama_model = os.environ.get('OLLAMA_MODEL', 'llama3')
+        logger.info(f"Ollama service URL set to: {self.ollama_url}")
+        logger.info(f"Ollama model set to: {self.ollama_model}")
+
         # Register commands
         @self.client.command(name='blur')
         async def blur(ctx, blur_level: int = 16):
             await self.process_image(ctx, 'blur', blur_level=blur_level)
+
         @self.client.command(name='contour')
         async def contour(ctx):
             await self.process_image(ctx, 'contour')
+
         @self.client.command(name='rotate')
         async def rotate(ctx):
             await self.process_image(ctx, 'rotate')
+
         @self.client.command(name='salt_pepper')
         async def salt_pepper(ctx):
             await self.process_image(ctx, 'salt_n_pepper')
+
         @self.client.command(name='segment')
         async def segment(ctx):
             await self.process_image(ctx, 'segment')
+
         @self.client.command(name='detect')
         async def detect(ctx):
             """Detect objects in an image using YOLO"""
             await self.detect_objects(ctx)
+
+        @self.client.command(name='ask')
+        async def ask(ctx, *, question: str):
+            """Ask a question to Ollama"""
+            await self.ask_ollama(ctx, question)
+
         @self.client.command(name='concat')
         async def concat(ctx, direction: str = 'horizontal'):
             """
@@ -351,6 +400,7 @@ class ImageProcessingBot(Bot):
             if direction not in ['horizontal', 'vertical']:
                 await ctx.send("Direction must be either 'horizontal' or 'vertical'")
                 return
+
             # We need to find the two most recent image attachments
             channel = ctx.channel
             image_attachments = []
@@ -360,41 +410,52 @@ class ImageProcessingBot(Bot):
                     image_attachments.append(message.attachments[0])
                     if len(image_attachments) >= 2:
                         break
+
             if len(image_attachments) < 2:
                 await ctx.send("Need at least two image attachments in recent messages to concatenate.")
                 return
+
             try:
                 # Download both images
                 file_path1 = f"photos/concat_1.{image_attachments[0].filename.split('.')[-1]}"
                 file_path2 = f"photos/concat_2.{image_attachments[1].filename.split('.')[-1]}"
                 await image_attachments[0].save(file_path1)
                 await image_attachments[1].save(file_path2)
+
                 # Process images
                 img1 = Img(file_path1)
                 img2 = Img(file_path2)
+
                 # Concatenate
                 img1.concat(img2, direction=direction)
+
                 # Save the processed image
                 new_path = img1.save_img()
+
                 # Send the processed image
                 await ctx.send(f"Concatenated images {direction}ly:", file=discord.File(new_path))
             except Exception as e:
                 logger.error(f"Error concatenating images: {e}")
                 await ctx.send(f"Error concatenating images: {e}")
+
     async def process_image(self, ctx, operation, **kwargs):
         """Process an image attachment with the specified operation"""
         if not ctx.message.attachments:
             await ctx.send("Please attach an image to process.")
             return
+
         attachment = ctx.message.attachments[0]
         if not attachment.content_type.startswith('image/'):
             await ctx.send("The attachment must be an image.")
             return
+
         # Download the image
         try:
             file_path = await self.download_user_photo(ctx.message)
+
             # Process image
             img = Img(file_path)
+
             # Apply the requested operation
             if operation == 'blur':
                 img.blur(blur_level=kwargs.get('blur_level', 16))
@@ -406,27 +467,34 @@ class ImageProcessingBot(Bot):
                 img.salt_n_pepper()
             elif operation == 'segment':
                 img.segment()
+
             # Save the processed image
             new_path = img.save_img()
+
             # Send the processed image
             await ctx.send(f"Processed image with {operation}:", file=discord.File(new_path))
         except Exception as e:
             logger.error(f"Error processing image: {e}")
             await ctx.send(f"Error processing image: {e}")
+
     async def detect_objects(self, ctx):
         """Send image to YOLO service for object detection"""
         if not ctx.message.attachments:
             await ctx.send("Please attach an image to detect objects.")
             return
+
         attachment = ctx.message.attachments[0]
         if not attachment.content_type.startswith('image/'):
             await ctx.send("The attachment must be an image.")
             return
+
         # Download the image
         try:
             file_path = await self.download_user_photo(ctx.message)
+
             # Let the user know we're working on it
             processing_msg = await ctx.send("🔍 Detecting objects in your image... Please wait.")
+
             # Send the image to YOLO service
             with open(file_path, 'rb') as img_file:
                 try:
@@ -436,16 +504,20 @@ class ImageProcessingBot(Bot):
                         self.yolo_url,
                         files={"file": img_file}
                     )
+
                     # Check if the request was successful
                     if response.status_code != 200:
                         await processing_msg.edit(
                             content=f"Error: YOLO service returned status code {response.status_code}")
                         return
+
                     # Parse the result
                     result = response.json()
+
                     # Extract detected objects
                     objects = result.get("labels", [])
                     count = result.get("detection_count", 0)
+
                     if count == 0:
                         await processing_msg.edit(content="No objects detected in the image.")
                     else:
@@ -453,17 +525,20 @@ class ImageProcessingBot(Bot):
                         object_counts = {}
                         for obj in objects:
                             object_counts[obj] = object_counts.get(obj, 0) + 1
+
                         # Format the result message
                         if count == 1:
                             detection_msg = f"I detected 1 object in your image:"
                         else:
                             detection_msg = f"I detected {count} objects in your image:"
+
                         # Add detected objects with counts
                         for obj, cnt in object_counts.items():
                             if cnt == 1:
                                 detection_msg += f"\n• {obj}"
                             else:
                                 detection_msg += f"\n• {obj} ({cnt})"
+
                         await processing_msg.edit(content=detection_msg)
                 except requests.RequestException as e:
                     logger.error(f"Error connecting to YOLO service: {e}")
@@ -472,3 +547,51 @@ class ImageProcessingBot(Bot):
         except Exception as e:
             logger.error(f"Error during object detection: {e}")
             await ctx.send(f"Error during object detection: {e}")
+
+    async def ask_ollama(self, ctx, question):
+        """Send a question to Ollama and return the response"""
+        # Let the user know we're working on it
+        processing_msg = await ctx.send(f"🤔 Thinking about: '{question}' ... Please wait.")
+
+        try:
+            # Prepare the data for the Ollama API - Updated for chat API format
+            data = {
+                "model": self.ollama_model,
+                "messages": [{"role": "user", "content": question}],
+                "stream": False
+            }
+
+            # Send the request to the Ollama API
+            logger.info(f"[DEBUG] Sending request to Ollama: {self.ollama_url}")
+            response = requests.post(
+                self.ollama_url,
+                json=data,
+                headers={"Content-Type": "application/json"}
+            )
+
+            # Check if the request was successful
+            if response.status_code != 200:
+                await processing_msg.edit(
+                    content=f"Error: Ollama service returned status code {response.status_code}")
+                return
+
+            # Parse the result
+            result = response.json()
+
+            # Extract the response - updated for chat API response format
+            ai_response = result.get("message", {}).get("content", "I'm sorry, I couldn't generate a response.")
+
+            # Format and send the response
+            formatted_response = f"**Question:** {question}\n\n**Answer:** {ai_response}"
+
+            # Discord has a 2000 character limit
+            if len(formatted_response) > 1990:
+                formatted_response = formatted_response[:1990] + "..."
+            await processing_msg.edit(content=formatted_response)
+        except requests.RequestException as e:
+            logger.error(f"Error connecting to Ollama service: {e}")
+            await processing_msg.edit(
+                content=f"Error: Could not connect to the Ollama service. Please try again later.")
+        except Exception as e:
+            logger.error(f"Error during Ollama request: {e}")
+            await ctx.send(f"Error during Ollama request: {e}")
