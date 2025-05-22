@@ -33,8 +33,8 @@ DISCORD_BOT_TOKEN=your_discord_token_here
 
 # Services Configuration
 YOLO_URL=http://10.0.1.90:8081/predict
-OLLAMA_URL=http://localhost:11434/api/chat
-OLLAMA_MODEL=mistral
+OLLAMA_URL=http://10.0.0.136:11434/api/chat
+OLLAMA_MODEL=gemma3:1b
 STATUS_SERVER_PORT=8443
 EOL
     echo ".env file created. Please edit it with your actual credentials."
