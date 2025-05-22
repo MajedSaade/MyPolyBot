@@ -43,9 +43,9 @@ sudo systemctl restart $SERVICE_NAME
 echo "Checking service status..."
 if ! systemctl is-active --quiet $SERVICE_NAME; then
     echo "❌ $SERVICE_NAME failed to start. Checking logs..."
-    sudo systemctl status $SERVICE_NAME --no-pager
+  sudo systemctl status $SERVICE_NAME --no-pager
     echo "Full logs available with: sudo journalctl -u $SERVICE_NAME"
-    exit 1
+  exit 1
 fi
 
 echo "✅ $SERVICE_NAME deployed and running successfully."

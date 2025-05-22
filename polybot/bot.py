@@ -355,8 +355,8 @@ class ImageProcessingBot(Bot):
         logger.info(f"YOLO service URL set to: {self.yolo_url}")
 
         # Define the Ollama service URL - can be overridden in environment variables
-        self.ollama_url = ollama_url or os.environ.get('OLLAMA_URL', 'http://localhost:11434/api/chat')
-        self.ollama_model = os.environ.get('OLLAMA_MODEL', 'llama3')
+        self.ollama_url = ollama_url or os.environ.get('OLLAMA_URL', 'http://10.0.0.136:11434/api/chat')
+        self.ollama_model = os.environ.get('OLLAMA_MODEL', 'gemma3:1b')
         logger.info(f"Ollama service URL set to: {self.ollama_url}")
         logger.info(f"Ollama model set to: {self.ollama_model}")
 
@@ -554,29 +554,46 @@ class ImageProcessingBot(Bot):
         processing_msg = await ctx.send(f"🤔 Thinking about: '{question}' ... Please wait.")
 
         try:
-            # Prepare the data for the Ollama API - Updated for chat API format
+            # Ensure model name includes the tag for specific model version (e.g., gemma3:1b)
+            model_name = self.ollama_model
+            
+            # Prepare the data for the Ollama API - Using the proper format for Ollama API
             data = {
-                "model": self.ollama_model,
+                "model": model_name,
                 "messages": [{"role": "user", "content": question}],
                 "stream": False
             }
 
+            # The correct endpoint is /api/chat for chat-based interactions
+            api_endpoint = self.ollama_url
+            if not api_endpoint.endswith('/api/chat'):
+                # If the URL doesn't end with /api/chat, ensure we're using the right endpoint
+                api_endpoint = api_endpoint.rstrip('/') + '/api/chat'
+            
+            # Log the request details for debugging
+            logger.info(f"[DEBUG] Sending request to Ollama: {api_endpoint}")
+            logger.info(f"[DEBUG] Using model: {model_name}")
+            logger.info(f"[DEBUG] Request data: {data}")
+            
             # Send the request to the Ollama API
-            logger.info(f"[DEBUG] Sending request to Ollama: {self.ollama_url}")
             response = requests.post(
-                self.ollama_url,
+                api_endpoint,
                 json=data,
-                headers={"Content-Type": "application/json"}
+                headers={"Content-Type": "application/json"},
+                timeout=60  # Add timeout to prevent hanging
             )
 
             # Check if the request was successful
             if response.status_code != 200:
+                logger.error(f"[ERROR] Ollama returned status code {response.status_code}")
+                logger.error(f"[ERROR] Response content: {response.text}")
                 await processing_msg.edit(
-                    content=f"Error: Ollama service returned status code {response.status_code}")
+                    content=f"Error: Ollama service returned status code {response.status_code}. Please check your server configuration.")
                 return
 
             # Parse the result
             result = response.json()
+            logger.info(f"[DEBUG] Response received: {result}")
 
             # Extract the response - updated for chat API response format
             ai_response = result.get("message", {}).get("content", "I'm sorry, I couldn't generate a response.")
@@ -591,7 +608,7 @@ class ImageProcessingBot(Bot):
         except requests.RequestException as e:
             logger.error(f"Error connecting to Ollama service: {e}")
             await processing_msg.edit(
-                content=f"Error: Could not connect to the Ollama service. Please try again later.")
+                content=f"Error: Could not connect to the Ollama service. Please check if Ollama is running at {self.ollama_url}.")
         except Exception as e:
             logger.error(f"Error during Ollama request: {e}")
             await ctx.send(f"Error during Ollama request: {e}")
