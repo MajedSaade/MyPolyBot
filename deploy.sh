@@ -7,6 +7,7 @@ SERVICE_NAME=polybot.service
 sudo cp $SERVICE_NAME /etc/systemd/system/
 
 # Reload systemd and restart the bot service
+sudo systemctl unmask polybot.service
 sudo systemctl daemon-reload
 sudo systemctl restart $SERVICE_NAME
 sudo systemctl enable $SERVICE_NAME
