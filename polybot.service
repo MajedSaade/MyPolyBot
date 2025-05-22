@@ -7,7 +7,7 @@ User=ubuntu
 WorkingDirectory=/home/ubuntu/MyPolyBot
 Environment="PYTHONUNBUFFERED=1"
 EnvironmentFile=/home/ubuntu/MyPolyBot/.env
-ExecStart=/home/ubuntu/MyPolyBot/.venv/bin/python3 /home/ubuntu/MyPolyBot/app.py
+ExecStart=/home/ubuntu/MyPolyBot/.venv/bin/python3 /home/ubuntu/MyPolyBot/polybot/app.py
 Restart=always
 RestartSec=5
 StandardOutput=journal

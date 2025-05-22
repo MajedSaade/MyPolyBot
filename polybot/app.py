@@ -2,15 +2,13 @@ import os
 import asyncio
 import threading
 from dotenv import load_dotenv
-from polybot.bot import ImageProcessingBot
+from bot import ImageProcessingBot
 from loguru import logger
 from fastapi import FastAPI
 import uvicorn
 
 # Load environment variables from .env file
 load_dotenv()
-
-"hiii"
 
 # Get the token from .env
 DISCORD_BOT_TOKEN = os.environ.get('DISCORD_BOT_TOKEN')
