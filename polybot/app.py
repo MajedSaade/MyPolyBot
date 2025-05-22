@@ -20,6 +20,7 @@ STATUS_SERVER_PORT = int(os.environ.get('STATUS_SERVER_PORT', 8443))
 # Create FastAPI app for health checks
 app = FastAPI()
 
+"For MidProject"
 
 @app.get("/")
 def health_check():
