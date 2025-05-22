@@ -1,0 +1,17 @@
+[Unit]
+Description=MyPolyBot Discord Bot Service
+After=network.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/MyPolyBot
+Environment="PYTHONUNBUFFERED=1"
+EnvironmentFile=/home/ubuntu/MyPolyBot/.env
+ExecStart=/home/ubuntu/MyPolyBot/.venv/bin/python3 /home/ubuntu/MyPolyBot/app.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

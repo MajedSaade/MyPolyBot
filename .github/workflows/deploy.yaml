@@ -1,48 +1,52 @@
 name: Deploy Polybot
-#majed
+
 on:
   push:
     branches:
       - main
-  workflow_dispatch:
-
-env:
-  REPO_URL: https://github.com/MajedSaade/MyPolyBot.git
-  REPO_NAME: MyPolyBot
 
 jobs:
-  deploy:
+  DeployToEC2:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout Repo (for metadata only)
         uses: actions/checkout@v4
 
-      - name: Configure SSH
+      - name: Deploy via SSH to EC2
         env:
-          SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
-          EC2_HOST: ${{ secrets.POLYBOT_EC2_HOST }}
-          EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
+          PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_IP: ${{ secrets.POLYBOT_EC2_IP }}
         run: |
-          mkdir -p ~/.ssh
-          echo "$SSH_PRIVATE_KEY" > ~/.ssh/private_key
-          chmod 600 ~/.ssh/private_key
-          cat > ~/.ssh/config << EOF
-          Host poly
-            HostName $EC2_HOST
-            User $EC2_USERNAME
-            IdentityFile ~/.ssh/private_key
-            StrictHostKeyChecking no
-          EOF
+          echo "$PRIVATE_KEY" > key.pem
+          chmod 600 key.pem
 
-      - name: Clone or Pull Code on EC2
-        run: |
-          ssh poly "if [ -d ~/${REPO_NAME} ]; then
-                     cd ~/${REPO_NAME} && git pull;
-                   else
-                     git clone ${REPO_URL} ~/${REPO_NAME};
-                   fi"
+          ssh -i key.pem -o StrictHostKeyChecking=no ubuntu@$EC2_IP '
+            set -e  # Exit on error
+            REPO_DIR="MyPolyBot"
 
-      - name: Run Deployment Script on EC2
-        run: |
-          ssh poly "cd ~/${REPO_NAME} && bash deploy.sh"
+            if [ -d "$REPO_DIR" ]; then
+              echo "✅ Pulling latest code..."
+              cd "$REPO_DIR"
+              git pull
+            else
+              echo "📦 Cloning repository..."
+              git clone https://github.com/${{ github.repository }}.git "$REPO_DIR"
+              cd "$REPO_DIR"
+            fi
+
+            echo "📁 Setting up virtual environment..."
+            if [ ! -d ".venv" ]; then
+              python3 -m venv .venv
+            fi
+
+            source .venv/bin/activate
+            pip install --upgrade pip
+            pip install -r polybot/requirements.txt
+
+            echo "🛠️ Updating polybot.service..."
+            sudo cp polybot.service /etc/systemd/system/polybot.service
+            sudo systemctl daemon-reload
+            sudo systemctl restart polybot.service
+            echo "🚀 Polybot service restarted."
+          '
