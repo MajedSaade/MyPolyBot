@@ -666,10 +666,24 @@ For each song, provide:
 1. Song title
 2. Artist name
 3. Year of release
-4. A direct YouTube link to the song
+4. A direct YouTube link to the song (must be a real, working YouTube link in the format https://www.youtube.com/watch?v=VIDEOID)
 5. A brief one-sentence description of why this song matches the preferences
 
-Format your response as a numbered list with clear sections for each song.
+IMPORTANT:
+- Format each song as a separate numbered item
+- Make sure all YouTube links are direct, valid links that work when clicked
+- Use the format https://www.youtube.com/watch?v=VIDEOID for all YouTube links
+- Do not use shortened URLs or mobile (m.youtube.com) links
+- Verify that each song actually exists and matches the preferences
+- Do not include any markdown formatting in the links, just provide the plain URL
+
+Example of good formatting for one song:
+
+1. Song Title: Example Song
+Artist Name: Example Artist
+Year of Release: 2000
+YouTube Link: https://www.youtube.com/watch?v=dQw4w9WgXcQ
+Description: This upbeat track perfectly captures the happy mood with its catchy melody and energetic performance.
 """
         
         # Send the request to Ollama
@@ -715,6 +729,9 @@ Format your response as a numbered list with clear sections for each song.
             # Extract the response
             ai_response = result.get("message", {}).get("content", "I couldn't generate song recommendations.")
             
+            # Process the AI response to format it better and fix links
+            processed_response = self.process_song_recommendations(ai_response)
+            
             # Format the response with a header
             formatted_response = f"**🎵 Song Recommendations Based On Your Preferences 🎵**\n\n"
             formatted_response += f"**Language:** {preferences['language']}\n"
@@ -722,7 +739,7 @@ Format your response as a numbered list with clear sections for each song.
             formatted_response += f"**Mood:** {preferences['mood']}\n"
             formatted_response += f"**Era:** {preferences['era']}\n"
             formatted_response += f"**Artist Type:** {preferences['artist_type']}\n\n"
-            formatted_response += ai_response
+            formatted_response += processed_response
             
             # Discord has a 2000 character limit
             if len(formatted_response) > 1990:
@@ -741,3 +758,85 @@ Format your response as a numbered list with clear sections for each song.
         except Exception as e:
             logger.error(f"Error during song recommendation: {e}")
             await ctx.send(f"Error during song recommendation: {e}")
+    
+    def process_song_recommendations(self, ai_response):
+        """Process the AI response to format song recommendations better"""
+        # Create a more structured format for the recommendations
+        try:
+            # First, try to extract song information using regex patterns
+            import re
+            
+            # Clean up the response - remove any markdown formatting that might interfere
+            cleaned_response = ai_response.replace("*", "").replace(",\n", "\n").replace(".,", ".")
+            
+            # Initialize the formatted output
+            formatted_output = ""
+            
+            # Find all songs in the response
+            songs = re.findall(r'(?:Song Title:|^\d+\.\s+)([^,\n]+).*?Artist Name:([^,\n]+).*?Year of Release:([^,\n]+).*?YouTube Link:.*?\[(.*?)\]\((.*?)\).*?Description:([^,\n]+)', 
+                              cleaned_response, re.DOTALL | re.MULTILINE)
+            
+            # If no songs found with the pattern, try an alternative pattern
+            if not songs:
+                songs = re.findall(r'(?:Song Title:|^\d+\.\s+)([^,\n]+).*?Artist Name:([^,\n]+).*?Year of Release:([^,\n]+).*?YouTube Link:(?:\s+)?(https?://[^\s]+).*?Description:([^,\n]+)', 
+                                  cleaned_response, re.DOTALL | re.MULTILINE)
+            
+            # If still no songs found, try another pattern that might match the format
+            if not songs:
+                songs = re.findall(r'(?:Song Title:|^\d+\.\s+)(.*?)(?:Artist Name:|👤\s+Artist:)(.*?)(?:Year of Release:|📅\s+Year:)(.*?)(?:YouTube Link:|🎵\s+Link:)(.*?)(?:Description:|💬)(.*?)(?:\n\n|$)', 
+                                  cleaned_response, re.DOTALL | re.MULTILINE)
+            
+            # If still no songs found, return the original response
+            if not songs:
+                return ai_response
+            
+            # Format each song
+            for i, song in enumerate(songs, 1):
+                if len(song) >= 5:  # Make sure we have all the needed parts
+                    title = song[0].strip()
+                    artist = song[1].strip()
+                    year = song[2].strip()
+                    
+                    # Handle different link formats
+                    if len(song) == 6:  # First pattern with markdown link
+                        link_text = song[3].strip()
+                        link_url = song[4].strip()
+                        description = song[5].strip()
+                    else:  # Second pattern with direct URL
+                        link_url = song[3].strip()
+                        description = song[4].strip()
+                        link_text = "YouTube"
+                    
+                    # Extract URL from text if needed
+                    url_match = re.search(r'(https?://[^\s]+)', link_url)
+                    if url_match:
+                        link_url = url_match.group(1)
+                    
+                    # Clean up URL - remove trailing punctuation
+                    link_url = link_url.rstrip('.,;:!?')
+                    
+                    # Ensure the URL is properly formatted
+                    if not link_url.startswith(('http://', 'https://')):
+                        link_url = f"https://{link_url}"
+                    
+                    # Format the song information
+                    formatted_output += f"**{i}. {title}**\n"
+                    formatted_output += f"👤 **Artist:** {artist}\n"
+                    formatted_output += f"📅 **Year:** {year}\n"
+                    # In Discord, plain URLs are automatically clickable
+                    formatted_output += f"🎵 **Link:** {link_url}\n"
+                    formatted_output += f"💬 **Why you'll like it:** {description}\n\n"
+            
+            # If we successfully formatted at least one song, return the formatted output
+            if formatted_output:
+                # Add a note about YouTube links
+                formatted_output += "**Note:** The links above are directly clickable. Enjoy your music! 🎧"
+                return formatted_output
+            
+            # Fallback to original response if formatting failed
+            return ai_response
+            
+        except Exception as e:
+            logger.error(f"Error formatting song recommendations: {e}")
+            # Return the original response if there was an error in formatting
+            return ai_response
