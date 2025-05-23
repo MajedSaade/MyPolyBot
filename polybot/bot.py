@@ -399,6 +399,22 @@ class ImageProcessingBot(Bot):
             """Get song recommendations based on your preferences"""
             await self.song_recommendation_flow(ctx)
 
+        @self.client.command(name='spotify')
+        async def spotify(ctx, search_type: str = 'track', *, search_query: str):
+            """
+            Search for content on Spotify and get a link to open it in the Spotify app
+            Usage: !spotify [track|artist|album|playlist] search_query
+            """
+            await self.spotify_search(ctx, search_type, search_query)
+
+        @self.client.command(name='spotifylink')
+        async def spotifylink(ctx, *, song_info: str):
+            """
+            Create a direct link to play a specific song on Spotify
+            Usage: !spotifylink song name - artist name
+            """
+            await self.create_spotify_direct_link(ctx, song_info)
+
         @self.client.command(name='concat')
         async def concat(ctx, direction: str = 'horizontal'):
             """
@@ -818,48 +834,102 @@ Description: This upbeat track perfectly captures the happy mood with its catchy
                     else:  # Second pattern with direct URL
                         link_url = song[3].strip()
                         description = song[4].strip()
-                        link_text = "YouTube"
-                    
-                    # Extract URL from text if needed
-                    url_match = re.search(r'(https?://[^\s]+)', link_url)
-                    if url_match:
-                        link_url = url_match.group(1)
-                    
-                    # Clean up URL - remove trailing punctuation and ensure it's a valid YouTube link
-                    link_url = link_url.rstrip('.,;:!?')
-                    
-                    # Fix common YouTube URL issues
-                    if 'm.youtube.com' in link_url:
-                        link_url = link_url.replace('m.youtube.com', 'www.youtube.com')
-                    
-                    # Make sure it's a proper YouTube video URL
-                    if 'youtube.com/watch?v=' not in link_url and 'youtu.be/' in link_url:
-                        # Convert youtu.be short links to full youtube.com links
-                        video_id = link_url.split('youtu.be/')[-1].split('?')[0].split('&')[0]
-                        link_url = f"https://www.youtube.com/watch?v={video_id}"
-                    
-                    # Ensure the URL is properly formatted
-                    if not link_url.startswith(('http://', 'https://')):
-                        link_url = f"https://{link_url}"
                     
                     # Format the song information
-                    formatted_output += f"**{i}. {title}**\n"
-                    formatted_output += f"👤 **Artist:** {artist}\n"
-                    formatted_output += f"📅 **Year:** {year}\n"
-                    # In Discord, plain URLs are automatically clickable
-                    formatted_output += f"🎵 **Link:** {link_url}\n"
-                    formatted_output += f"💬 **Why you'll like it:** {description}\n\n"
+                    formatted_output += f"**{i}. {title}** by {artist} ({year})\n"
+                    formatted_output += f"🎬 [Watch on YouTube]({link_url})\n"
+                    
+                    # Add Spotify link
+                    spotify_search = f"{title} {artist}".replace(' ', '%20')
+                    spotify_app_link = f"spotify:search:{spotify_search}"
+                    spotify_web_link = f"https://open.spotify.com/search/{spotify_search}/tracks"
+                    formatted_output += f"🎵 [Open in Spotify]({spotify_app_link}) | [Web]({spotify_web_link})\n"
+                    
+                    formatted_output += f"💬 {description}\n\n"
             
-            # If we successfully formatted at least one song, return the formatted output
-            if formatted_output:
-                # Add a note about YouTube links
-                formatted_output += "**Note:** The links above are directly clickable. Enjoy your music! 🎧"
-                return formatted_output
-            
-            # Fallback to original response if formatting failed
-            return ai_response
+            return formatted_output
             
         except Exception as e:
             logger.error(f"Error formatting song recommendations: {e}")
             # Return the original response if there was an error in formatting
             return ai_response
+
+    async def spotify_search(self, ctx, search_type, search_query):
+        """Search for content on Spotify and provide a link that opens in the Spotify app"""
+        # Validate search type
+        valid_types = ['track', 'artist', 'album', 'playlist']
+        if search_type not in valid_types:
+            await ctx.send(f"Invalid search type: {search_type}. Valid types are: {', '.join(valid_types)}")
+            search_type = 'track'  # Default to track if invalid type
+            await ctx.send(f"Defaulting to search type: track")
+        
+        # Let the user know we're searching
+        await ctx.send(f"🔍 Searching Spotify for {search_type}: **{search_query}**")
+        
+        try:
+            # Format the search query for a URL
+            formatted_query = search_query.replace(' ', '%20')
+            
+            # Create Spotify links based on search type
+            if search_type == 'track':
+                spotify_web_link = f"https://open.spotify.com/search/{formatted_query}/tracks"
+                spotify_app_link = f"spotify:search:{formatted_query}"
+            elif search_type == 'artist':
+                spotify_web_link = f"https://open.spotify.com/search/{formatted_query}/artists"
+                spotify_app_link = f"spotify:search:{formatted_query}:artist"
+            elif search_type == 'album':
+                spotify_web_link = f"https://open.spotify.com/search/{formatted_query}/albums"
+                spotify_app_link = f"spotify:search:{formatted_query}:album"
+            elif search_type == 'playlist':
+                spotify_web_link = f"https://open.spotify.com/search/{formatted_query}/playlists"
+                spotify_app_link = f"spotify:search:{formatted_query}:playlist"
+            
+            # Create a message with both links
+            message = (
+                f"**🎵 Spotify Search Results for {search_type}: {search_query}**\n\n"
+                f"**Open in Spotify app:** [Click here]({spotify_app_link})\n"
+                f"**Open in web browser:** [Click here]({spotify_web_link})\n\n"
+                f"*Note: The Spotify app link will only work if you have Spotify installed on your device.*"
+            )
+            
+            await ctx.send(message)
+            
+        except Exception as e:
+            logger.error(f"Error during Spotify search: {e}")
+            await ctx.send(f"Error during Spotify search: {e}")
+
+    async def create_spotify_direct_link(self, ctx, song_info):
+        """Create a direct link to play a specific song on Spotify"""
+        try:
+            # Check if the song info contains a separator
+            if ' - ' in song_info:
+                song, artist = song_info.split(' - ', 1)
+                song = song.strip()
+                artist = artist.strip()
+                search_query = f"{song} artist:{artist}"
+                display_text = f"**{song}** by **{artist}**"
+            else:
+                # If no separator, use the whole string as the song name
+                search_query = song_info.strip()
+                display_text = f"**{search_query}**"
+            
+            # Format the search query for a URL
+            formatted_query = search_query.replace(' ', '%20')
+            
+            # Create Spotify links
+            spotify_web_link = f"https://open.spotify.com/search/{formatted_query}/tracks"
+            spotify_app_link = f"spotify:search:{formatted_query}"
+            
+            # Create a message with both links
+            message = (
+                f"🎵 Play {display_text} on Spotify:\n\n"
+                f"**Open in Spotify app:** [Play Now]({spotify_app_link})\n"
+                f"**Open in web browser:** [Search on Spotify]({spotify_web_link})\n\n"
+                f"*Tip: For best results, format your request as: !spotifylink song name - artist name*"
+            )
+            
+            await ctx.send(message)
+            
+        except Exception as e:
+            logger.error(f"Error creating Spotify link: {e}")
+            await ctx.send(f"Error creating Spotify link: {e}")
