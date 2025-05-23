@@ -21,6 +21,8 @@ class Bot:
         # Create a Discord bot client
         self.client = commands.Bot(command_prefix='!', intents=intents)
         self.token = token
+        # Track active conversations to prevent default handler from responding
+        self.active_conversations = set()
 
         # Set up event handlers
         @self.client.event
@@ -34,8 +36,8 @@ class Bot:
                 return
             # Process commands
             await self.client.process_commands(message)
-            # Default message handler
-            if not message.content.startswith('!'):
+            # Default message handler - only if not in an active conversation
+            if not message.content.startswith('!') and message.author.id not in self.active_conversations:
                 await self.handle_message(message)
 
     async def start(self):
@@ -621,6 +623,9 @@ class ImageProcessingBot(Bot):
 
     async def song_recommendation_flow(self, ctx):
         """Interactive flow to get song recommendations based on user preferences"""
+        # Add user to active conversations to prevent default handler from responding
+        self.active_conversations.add(ctx.author.id)
+        
         # Let the user know we're starting the recommendation flow
         await ctx.send("🎵 Welcome to Song Recommendations! I'll ask you a few questions to find the perfect songs for you.")
         
@@ -640,22 +645,24 @@ class ImageProcessingBot(Bot):
         def check(message):
             return message.author == ctx.author and message.channel == ctx.channel
         
-        # Ask each question and wait for response
-        for q in questions:
-            await ctx.send(q["question"])
-            try:
-                # Wait for user response with a timeout of 60 seconds
-                response = await self.client.wait_for('message', check=check, timeout=60)
-                preferences[q["key"]] = response.content
-            except asyncio.TimeoutError:
-                await ctx.send("You took too long to respond. Song recommendation cancelled.")
-                return
-        
-        # Confirmation message
-        await ctx.send("Thanks for your preferences! Searching for song recommendations now... 🔍")
-        
-        # Create a prompt for Ollama
-        prompt = f"""Based on the following preferences, recommend the top 5 songs:
+        try:
+            # Ask each question and wait for response
+            for q in questions:
+                await ctx.send(q["question"])
+                try:
+                    # Wait for user response with a timeout of 60 seconds
+                    response = await self.client.wait_for('message', check=check, timeout=60)
+                    preferences[q["key"]] = response.content
+                except asyncio.TimeoutError:
+                    await ctx.send("You took too long to respond. Song recommendation cancelled.")
+                    self.active_conversations.remove(ctx.author.id)  # Remove from active conversations
+                    return
+            
+            # Confirmation message
+            await ctx.send("Thanks for your preferences! Searching for song recommendations now... 🔍")
+            
+            # Create a prompt for Ollama
+            prompt = f"""Based on the following preferences, recommend the top 5 songs:
 - Language: {preferences['language']}
 - Genre: {preferences['genre']}
 - Mood: {preferences['mood']}
@@ -676,6 +683,8 @@ IMPORTANT:
 - Do not use shortened URLs or mobile (m.youtube.com) links
 - Verify that each song actually exists and matches the preferences
 - Do not include any markdown formatting in the links, just provide the plain URL
+- Only recommend songs that are actually available on YouTube
+- Test each YouTube link to ensure it's a valid, working link to an existing video
 
 Example of good formatting for one song:
 
@@ -685,10 +694,14 @@ Year of Release: 2000
 YouTube Link: https://www.youtube.com/watch?v=dQw4w9WgXcQ
 Description: This upbeat track perfectly captures the happy mood with its catchy melody and energetic performance.
 """
-        
-        # Send the request to Ollama
-        await self.get_song_recommendations(ctx, prompt, preferences)
-    
+            
+            # Send the request to Ollama
+            await self.get_song_recommendations(ctx, prompt, preferences)
+        finally:
+            # Always remove from active conversations when done
+            if ctx.author.id in self.active_conversations:
+                self.active_conversations.remove(ctx.author.id)
+
     async def get_song_recommendations(self, ctx, prompt, preferences):
         """Get song recommendations from Ollama based on user preferences"""
         # Let the user know we're working on it
@@ -812,8 +825,18 @@ Description: This upbeat track perfectly captures the happy mood with its catchy
                     if url_match:
                         link_url = url_match.group(1)
                     
-                    # Clean up URL - remove trailing punctuation
+                    # Clean up URL - remove trailing punctuation and ensure it's a valid YouTube link
                     link_url = link_url.rstrip('.,;:!?')
+                    
+                    # Fix common YouTube URL issues
+                    if 'm.youtube.com' in link_url:
+                        link_url = link_url.replace('m.youtube.com', 'www.youtube.com')
+                    
+                    # Make sure it's a proper YouTube video URL
+                    if 'youtube.com/watch?v=' not in link_url and 'youtu.be/' in link_url:
+                        # Convert youtu.be short links to full youtube.com links
+                        video_id = link_url.split('youtu.be/')[-1].split('?')[0].split('&')[0]
+                        link_url = f"https://www.youtube.com/watch?v={video_id}"
                     
                     # Ensure the URL is properly formatted
                     if not link_url.startswith(('http://', 'https://')):
