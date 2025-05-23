@@ -10,6 +10,7 @@ import requests
 from pathlib import Path
 from polybot.img_proc import Img
 import json
+import asyncio
 
 
 class Bot:
@@ -391,6 +392,11 @@ class ImageProcessingBot(Bot):
             """Ask a question to Ollama"""
             await self.ask_ollama(ctx, question)
 
+        @self.client.command(name='songrec')
+        async def songrec(ctx):
+            """Get song recommendations based on your preferences"""
+            await self.song_recommendation_flow(ctx)
+
         @self.client.command(name='concat')
         async def concat(ctx, direction: str = 'horizontal'):
             """
@@ -612,3 +618,126 @@ class ImageProcessingBot(Bot):
         except Exception as e:
             logger.error(f"Error during Ollama request: {e}")
             await ctx.send(f"Error during Ollama request: {e}")
+
+    async def song_recommendation_flow(self, ctx):
+        """Interactive flow to get song recommendations based on user preferences"""
+        # Let the user know we're starting the recommendation flow
+        await ctx.send("🎵 Welcome to Song Recommendations! I'll ask you a few questions to find the perfect songs for you.")
+        
+        # Dictionary to store user preferences
+        preferences = {}
+        
+        # Ask questions and wait for responses
+        questions = [
+            {"key": "language", "question": "What language would you prefer for the songs? (e.g., English, Spanish, Korean, etc.)"},
+            {"key": "genre", "question": "What genre of music do you like? (e.g., Pop, Rock, Hip-hop, Jazz, Classical, etc.)"},
+            {"key": "mood", "question": "What mood are you in? (e.g., Happy, Sad, Energetic, Relaxed, etc.)"},
+            {"key": "era", "question": "From which time period would you prefer songs? (e.g., 60s, 80s, 90s, 2000s, 2010s, Recent, etc.)"},
+            {"key": "artist_type", "question": "Do you prefer solo artists or bands? (or type 'any' if no preference)"}
+        ]
+        
+        # Function to check if the message is from the original user in the same channel
+        def check(message):
+            return message.author == ctx.author and message.channel == ctx.channel
+        
+        # Ask each question and wait for response
+        for q in questions:
+            await ctx.send(q["question"])
+            try:
+                # Wait for user response with a timeout of 60 seconds
+                response = await self.client.wait_for('message', check=check, timeout=60)
+                preferences[q["key"]] = response.content
+            except asyncio.TimeoutError:
+                await ctx.send("You took too long to respond. Song recommendation cancelled.")
+                return
+        
+        # Confirmation message
+        await ctx.send("Thanks for your preferences! Searching for song recommendations now... 🔍")
+        
+        # Create a prompt for Ollama
+        prompt = f"""Based on the following preferences, recommend the top 5 songs:
+- Language: {preferences['language']}
+- Genre: {preferences['genre']}
+- Mood: {preferences['mood']}
+- Era: {preferences['era']}
+- Artist Type: {preferences['artist_type']}
+
+For each song, provide:
+1. Song title
+2. Artist name
+3. Year of release
+4. A direct YouTube link to the song
+5. A brief one-sentence description of why this song matches the preferences
+
+Format your response as a numbered list with clear sections for each song.
+"""
+        
+        # Send the request to Ollama
+        await self.get_song_recommendations(ctx, prompt, preferences)
+    
+    async def get_song_recommendations(self, ctx, prompt, preferences):
+        """Get song recommendations from Ollama based on user preferences"""
+        # Let the user know we're working on it
+        processing_msg = await ctx.send("🎧 Finding the perfect songs for you... Please wait.")
+        
+        try:
+            # Prepare the data for the Ollama API
+            data = {
+                "model": self.ollama_model,
+                "messages": [{"role": "user", "content": prompt}],
+                "stream": False
+            }
+            
+            # The correct endpoint is /api/chat for chat-based interactions
+            api_endpoint = self.ollama_url
+            if not api_endpoint.endswith('/api/chat'):
+                api_endpoint = api_endpoint.rstrip('/') + '/api/chat'
+            
+            # Send the request to the Ollama API
+            response = requests.post(
+                api_endpoint,
+                json=data,
+                headers={"Content-Type": "application/json"},
+                timeout=60
+            )
+            
+            # Check if the request was successful
+            if response.status_code != 200:
+                logger.error(f"[ERROR] Ollama returned status code {response.status_code}")
+                logger.error(f"[ERROR] Response content: {response.text}")
+                await processing_msg.edit(
+                    content=f"Error: Couldn't get song recommendations. Please try again later.")
+                return
+                
+            # Parse the result
+            result = response.json()
+            
+            # Extract the response
+            ai_response = result.get("message", {}).get("content", "I couldn't generate song recommendations.")
+            
+            # Format the response with a header
+            formatted_response = f"**🎵 Song Recommendations Based On Your Preferences 🎵**\n\n"
+            formatted_response += f"**Language:** {preferences['language']}\n"
+            formatted_response += f"**Genre:** {preferences['genre']}\n"
+            formatted_response += f"**Mood:** {preferences['mood']}\n"
+            formatted_response += f"**Era:** {preferences['era']}\n"
+            formatted_response += f"**Artist Type:** {preferences['artist_type']}\n\n"
+            formatted_response += ai_response
+            
+            # Discord has a 2000 character limit
+            if len(formatted_response) > 1990:
+                # Split into multiple messages if too long
+                parts = [formatted_response[i:i+1990] for i in range(0, len(formatted_response), 1990)]
+                await processing_msg.edit(content=parts[0])
+                for part in parts[1:]:
+                    await ctx.send(part)
+            else:
+                await processing_msg.edit(content=formatted_response)
+                
+        except requests.RequestException as e:
+            logger.error(f"Error connecting to Ollama service: {e}")
+            await processing_msg.edit(
+                content=f"Error: Could not connect to the Ollama service. Please check if Ollama is running.")
+        except Exception as e:
+            logger.error(f"Error during song recommendation: {e}")
+            await ctx.send(f"Error during song recommendation: {e}")
