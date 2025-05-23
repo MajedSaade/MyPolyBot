@@ -586,7 +586,7 @@ class ImageProcessingBot(Bot):
                 api_endpoint,
                 json=data,
                 headers={"Content-Type": "application/json"},
-                timeout=60  # Add timeout to prevent hanging
+                timeout=180  # Updated timeout to 3 minutes
             )
 
             # Check if the request was successful
@@ -698,7 +698,7 @@ Format your response as a numbered list with clear sections for each song.
                 api_endpoint,
                 json=data,
                 headers={"Content-Type": "application/json"},
-                timeout=60
+                timeout=180  # Updated timeout to 3 minutes
             )
             
             # Check if the request was successful
