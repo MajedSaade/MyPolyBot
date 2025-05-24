@@ -286,8 +286,10 @@ class Bot:
                 "• `!segment` - Convert image to black & white\n"
                 "• `!detect` - Detect objects in an image using YOLO\n"
                 "• `!concat [horizontal|vertical]` - Join two images\n"
+                "• `!spotify [track|artist|album|playlist] search_query` - Search for music on Spotify\n"
+                "• `!songrec` - Get personalized song recommendations\n"
                 "• `!ask [question]` - Ask the AI a question using Ollama\n\n"
-                "For commands except `!concat` and `!ask`, attach an image to your message.\n"
+                "For commands except `!concat`, `!spotify`, `!songrec` and `!ask`, attach an image to your message.\n"
                 "For `!concat`, the bot will use the two most recent images in the channel.\n\n"
                 "You can also just chat with me! I respond to greetings, questions about how I'm doing, jokes, and more!"
             )
@@ -358,7 +360,7 @@ class ImageProcessingBot(Bot):
         logger.info(f"YOLO service URL set to: {self.yolo_url}")
 
         # Define the Ollama service URL - can be overridden in environment variables
-        self.ollama_url = ollama_url or os.environ.get('OLLAMA_URL', 'http://10.0.0.136:11434/api/chat')
+        self.ollama_url = ollama_url or os.environ.get('OLLAMA_URL', 'http://10.0.1.33:11434/api/chat')
         self.ollama_model = os.environ.get('OLLAMA_MODEL', 'gemma3:1b')
         logger.info(f"Ollama service URL set to: {self.ollama_url}")
         logger.info(f"Ollama model set to: {self.ollama_model}")
@@ -406,14 +408,6 @@ class ImageProcessingBot(Bot):
             Usage: !spotify [track|artist|album|playlist] search_query
             """
             await self.spotify_search(ctx, search_type, search_query)
-
-        @self.client.command(name='spotifylink')
-        async def spotifylink(ctx, *, song_info: str):
-            """
-            Create a direct link to play a specific song on Spotify
-            Usage: !spotifylink song name - artist name
-            """
-            await self.create_spotify_direct_link(ctx, song_info)
 
         @self.client.command(name='concat')
         async def concat(ctx, direction: str = 'horizontal'):
@@ -870,26 +864,44 @@ Description: This upbeat track perfectly captures the happy mood with its catchy
             # Format the search query for a URL
             formatted_query = search_query.replace(' ', '%20')
             
-            # Create Spotify links based on search type
+            # Create Spotify links based on search type - using web links that will redirect to app
             if search_type == 'track':
-                spotify_web_link = f"https://open.spotify.com/search/{formatted_query}/tracks"
-                spotify_app_link = f"spotify:search:{formatted_query}"
+                # For tracks, use the web links that will redirect to the app when clicked
+                spotify_web_link = f"https://open.spotify.com/search/{formatted_query}"
+                specific_track_link = f"https://open.spotify.com/search/track:{formatted_query}"
             elif search_type == 'artist':
-                spotify_web_link = f"https://open.spotify.com/search/{formatted_query}/artists"
-                spotify_app_link = f"spotify:search:{formatted_query}:artist"
+                spotify_web_link = f"https://open.spotify.com/search/artist:{formatted_query}"
             elif search_type == 'album':
-                spotify_web_link = f"https://open.spotify.com/search/{formatted_query}/albums"
-                spotify_app_link = f"spotify:search:{formatted_query}:album"
+                spotify_web_link = f"https://open.spotify.com/search/album:{formatted_query}"
             elif search_type == 'playlist':
-                spotify_web_link = f"https://open.spotify.com/search/{formatted_query}/playlists"
-                spotify_app_link = f"spotify:search:{formatted_query}:playlist"
+                spotify_web_link = f"https://open.spotify.com/search/playlist:{formatted_query}"
             
-            # Create a message with both links
+            # Create a message with the links
             message = (
                 f"**🎵 Spotify Search Results for {search_type}: {search_query}**\n\n"
-                f"**Open in Spotify app:** [Click here]({spotify_app_link})\n"
-                f"**Open in web browser:** [Click here]({spotify_web_link})\n\n"
-                f"*Note: The Spotify app link will only work if you have Spotify installed on your device.*"
+                f"**Open in Spotify:** [Click here]({spotify_web_link})\n"
+            )
+            
+            # Add specific track link if searching for a track
+            if search_type == 'track':
+                message += (
+                    f"**Direct track search:** [Open track]({specific_track_link})\n\n"
+                )
+            
+            # Add instructions for copying the Spotify URI manually
+            if search_type == 'track':
+                spotify_uri = f"spotify:search:track:{formatted_query}"
+            elif search_type == 'artist':
+                spotify_uri = f"spotify:search:artist:{formatted_query}"
+            elif search_type == 'album':
+                spotify_uri = f"spotify:search:album:{formatted_query}"
+            elif search_type == 'playlist':
+                spotify_uri = f"spotify:search:playlist:{formatted_query}"
+            
+            message += (
+                f"**Copy this Spotify URI to open directly in the app:**\n"
+                f"`{spotify_uri}`\n\n"
+                f"*Note: The web links will open in your browser first, then redirect to the Spotify app if installed.*"
             )
             
             await ctx.send(message)
@@ -897,39 +909,3 @@ Description: This upbeat track perfectly captures the happy mood with its catchy
         except Exception as e:
             logger.error(f"Error during Spotify search: {e}")
             await ctx.send(f"Error during Spotify search: {e}")
-
-    async def create_spotify_direct_link(self, ctx, song_info):
-        """Create a direct link to play a specific song on Spotify"""
-        try:
-            # Check if the song info contains a separator
-            if ' - ' in song_info:
-                song, artist = song_info.split(' - ', 1)
-                song = song.strip()
-                artist = artist.strip()
-                search_query = f"{song} artist:{artist}"
-                display_text = f"**{song}** by **{artist}**"
-            else:
-                # If no separator, use the whole string as the song name
-                search_query = song_info.strip()
-                display_text = f"**{search_query}**"
-            
-            # Format the search query for a URL
-            formatted_query = search_query.replace(' ', '%20')
-            
-            # Create Spotify links
-            spotify_web_link = f"https://open.spotify.com/search/{formatted_query}/tracks"
-            spotify_app_link = f"spotify:search:{formatted_query}"
-            
-            # Create a message with both links
-            message = (
-                f"🎵 Play {display_text} on Spotify:\n\n"
-                f"**Open in Spotify app:** [Play Now]({spotify_app_link})\n"
-                f"**Open in web browser:** [Search on Spotify]({spotify_web_link})\n\n"
-                f"*Tip: For best results, format your request as: !spotifylink song name - artist name*"
-            )
-            
-            await ctx.send(message)
-            
-        except Exception as e:
-            logger.error(f"Error creating Spotify link: {e}")
-            await ctx.send(f"Error creating Spotify link: {e}")

@@ -15,7 +15,7 @@ This guide explains how to set up and manage the PolyBot Discord service on your
    cat > .env << EOF
    DISCORD_BOT_TOKEN=your_discord_token_here
    YOLO_URL=http://10.0.1.90:8081/predict
-   OLLAMA_URL=http://10.0.0.136:11434/api/chat
+   OLLAMA_URL=http://10.0.1.33:11434/api/chat
    OLLAMA_MODEL=gemma3:1b
    STATUS_SERVER_PORT=8443
    EOF
