@@ -20,7 +20,7 @@ STATUS_SERVER_PORT = int(os.environ.get('STATUS_SERVER_PORT', 8443))
 # Create FastAPI app for health checks
 app = FastAPI()
 
-"For MyPolyBot "
+"For MyPolyBot check if good"
 
 @app.get("/")
 def health_check():
