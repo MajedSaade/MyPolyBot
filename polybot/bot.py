@@ -21,6 +21,8 @@ class Bot:
         # Create a Discord bot client
         self.client = commands.Bot(command_prefix='!', intents=intents)
         self.token = token
+        # Track active conversations to prevent default handler from responding
+        self.active_conversations = set()
 
         # Set up event handlers
         @self.client.event
@@ -34,8 +36,8 @@ class Bot:
                 return
             # Process commands
             await self.client.process_commands(message)
-            # Default message handler
-            if not message.content.startswith('!'):
+            # Default message handler - only if not in an active conversation
+            if not message.content.startswith('!') and message.author.id not in self.active_conversations:
                 await self.handle_message(message)
 
     async def start(self):
@@ -284,10 +286,10 @@ class Bot:
                 "• `!segment` - Convert image to black & white\n"
                 "• `!detect` - Detect objects in an image using YOLO\n"
                 "• `!concat [horizontal|vertical]` - Join two images\n"
-                "• `!ask [question]` - Ask the AI a question using Ollama\n"
+                "• `!spotify [track|artist|album|playlist] search_query` - Search for music on Spotify\n"
                 "• `!songrec` - Get personalized song recommendations\n"
-                "• `!spotify [song name/artist]` - Search for music on Spotify\n\n"
-                "For image commands like `!blur`, attach an image to your message.\n"
+                "• `!ask [question]` - Ask the AI a question using Ollama\n\n"
+                "For commands except `!concat`, `!spotify`, `!songrec` and `!ask`, attach an image to your message.\n"
                 "For `!concat`, the bot will use the two most recent images in the channel.\n\n"
                 "You can also just chat with me! I respond to greetings, questions about how I'm doing, jokes, and more!"
             )
@@ -300,11 +302,10 @@ class Bot:
                 "I'm an Image Processing Bot! 🤖\n\n"
                 "I can help you apply various effects and transformations to your images. "
                 "Upload an image with one of my commands, and I'll process it for you.\n\n"
-                "I can detect objects in your images using the YOLO model!\n\n"
+                "I can also detect objects in your images using the YOLO model!\n\n"
                 "With my Ollama integration, I can answer questions using AI models!\n\n"
-                "I can recommend songs based on your preferences, and even open Spotify to play them!\n\n"
                 "I can also chat with you about your day, tell jokes, and "
-                "try to be a helpful companion for all your needs!\n\n"
+                "try to be a helpful companion for all your image processing needs!\n\n"
                 "Type `help` or use the `!help` command to see what I can do!"
             )
             await message.channel.send(about_message)
@@ -359,13 +360,10 @@ class ImageProcessingBot(Bot):
         logger.info(f"YOLO service URL set to: {self.yolo_url}")
 
         # Define the Ollama service URL - can be overridden in environment variables
-        self.ollama_url = ollama_url or os.environ.get('OLLAMA_URL', 'http://10.0.0.136:11434/api/chat')
+        self.ollama_url = ollama_url or os.environ.get('OLLAMA_URL', 'http://35.86.203.133:11434/api/chat')
         self.ollama_model = os.environ.get('OLLAMA_MODEL', 'gemma3:1b')
         logger.info(f"Ollama service URL set to: {self.ollama_url}")
         logger.info(f"Ollama model set to: {self.ollama_model}")
-
-        # Store the current state of user conversations
-        self.conversation_state = {}
 
         # Register commands
         @self.client.command(name='blur')
@@ -404,13 +402,12 @@ class ImageProcessingBot(Bot):
             await self.song_recommendation_flow(ctx)
 
         @self.client.command(name='spotify')
-        async def spotify(ctx, *, query: str = None):
-            """Search for a song on Spotify or open the Spotify app"""
-            if not query:
-                await ctx.send("Please provide a search query. Usage: `!spotify <song name or artist>`")
-                return
-            
-            await self.open_spotify_search(ctx, query)
+        async def spotify(ctx, search_type: str = 'track', *, search_query: str):
+            """
+            Search for content on Spotify and get a link to open it in the Spotify app
+            Usage: !spotify [track|artist|album|playlist] search_query
+            """
+            await self.spotify_search(ctx, search_type, search_query)
 
         @self.client.command(name='concat')
         async def concat(ctx, direction: str = 'horizontal'):
@@ -577,7 +574,7 @@ class ImageProcessingBot(Bot):
         try:
             # Ensure model name includes the tag for specific model version (e.g., gemma3:1b)
             model_name = self.ollama_model
-            
+
             # Prepare the data for the Ollama API - Using the proper format for Ollama API
             data = {
                 "model": model_name,
@@ -590,12 +587,12 @@ class ImageProcessingBot(Bot):
             if not api_endpoint.endswith('/api/chat'):
                 # If the URL doesn't end with /api/chat, ensure we're using the right endpoint
                 api_endpoint = api_endpoint.rstrip('/') + '/api/chat'
-            
+
             # Log the request details for debugging
             logger.info(f"[DEBUG] Sending request to Ollama: {api_endpoint}")
             logger.info(f"[DEBUG] Using model: {model_name}")
             logger.info(f"[DEBUG] Request data: {data}")
-            
+
             # Send the request to the Ollama API
             response = requests.post(
                 api_endpoint,
@@ -636,276 +633,50 @@ class ImageProcessingBot(Bot):
 
     async def song_recommendation_flow(self, ctx):
         """Interactive flow to get song recommendations based on user preferences"""
+        # Add user to active conversations to prevent default handler from responding
+        self.active_conversations.add(ctx.author.id)
+
         # Let the user know we're starting the recommendation flow
-        await ctx.send("🎵 Welcome to Song Recommendations! I'll ask you a few questions to find the perfect songs for you.")
-        
-        # Get the user ID
-        user_id = str(ctx.author.id)
-        
-        # Initialize the conversation state
-        self.conversation_state[user_id] = {
-            'flow': 'song_recommendation',
-            'question_index': 0,
-            'preferences': {}
-        }
-        
-        # Ask the first question
+        await ctx.send(
+            "🎵 Welcome to Song Recommendations! I'll ask you a few questions to find the perfect songs for you.")
+
+        # Dictionary to store user preferences
+        preferences = {}
+
+        # Ask questions and wait for responses
         questions = [
-            {"key": "language", "question": "What language would you prefer for the songs? (e.g., English, Spanish, Korean, etc.)"},
-            {"key": "genre", "question": "What genre of music do you like? (e.g., Pop, Rock, Hip-hop, Jazz, Classical, etc.)"},
+            {"key": "language",
+             "question": "What language would you prefer for the songs? (e.g., English, Spanish, Korean, etc.)"},
+            {"key": "genre",
+             "question": "What genre of music do you like? (e.g., Pop, Rock, Hip-hop, Jazz, Classical, etc.)"},
             {"key": "mood", "question": "What mood are you in? (e.g., Happy, Sad, Energetic, Relaxed, etc.)"},
-            {"key": "era", "question": "From which time period would you prefer songs? (e.g., 60s, 80s, 90s, 2000s, 2010s, Recent, etc.)"},
+            {"key": "era",
+             "question": "From which time period would you prefer songs? (e.g., 60s, 80s, 90s, 2000s, 2010s, Recent, etc.)"},
             {"key": "artist_type", "question": "Do you prefer solo artists or bands? (or type 'any' if no preference)"}
         ]
-        
-        # Ask the first question to start the flow
-        await ctx.send(questions[0]["question"])
-    
-    async def get_song_recommendations(self, channel, prompt, preferences):
-        """Get song recommendations from Ollama based on user preferences"""
-        # Let the user know we're working on it
-        processing_msg = await channel.send("🎧 Finding the perfect songs for you... Please wait.")
-        
-        try:
-            # Prepare the data for the Ollama API
-            data = {
-                "model": self.ollama_model,
-                "messages": [{"role": "user", "content": prompt}],
-                "stream": False
-            }
-            
-            # The correct endpoint is /api/chat for chat-based interactions
-            api_endpoint = self.ollama_url
-            if not api_endpoint.endswith('/api/chat'):
-                api_endpoint = api_endpoint.rstrip('/') + '/api/chat'
-            
-            # Send the request to the Ollama API
-            response = requests.post(
-                api_endpoint,
-                json=data,
-                headers={"Content-Type": "application/json"},
-                timeout=180  # Updated timeout to 3 minutes
-            )
-            
-            # Check if the request was successful
-            if response.status_code != 200:
-                logger.error(f"[ERROR] Ollama returned status code {response.status_code}")
-                logger.error(f"[ERROR] Response content: {response.text}")
-                await processing_msg.edit(
-                    content=f"Error: Couldn't get song recommendations. Please try again later.")
-                return
-                
-            # Parse the result
-            result = response.json()
-            
-            # Extract the response
-            ai_response = result.get("message", {}).get("content", "I couldn't generate song recommendations.")
-            
-            # Process the AI response to format it better and fix links
-            processed_response = self.process_song_recommendations(ai_response)
-            
-            # Format the response with a header
-            formatted_response = f"**🎵 Song Recommendations Based On Your Preferences 🎵**\n\n"
-            formatted_response += f"**Language:** {preferences['language']}\n"
-            formatted_response += f"**Genre:** {preferences['genre']}\n"
-            formatted_response += f"**Mood:** {preferences['mood']}\n"
-            formatted_response += f"**Era:** {preferences['era']}\n"
-            formatted_response += f"**Artist Type:** {preferences['artist_type']}\n\n"
-            formatted_response += processed_response
-            
-            # Discord has a 2000 character limit
-            if len(formatted_response) > 1990:
-                # Split into multiple messages if too long
-                parts = [formatted_response[i:i+1990] for i in range(0, len(formatted_response), 1990)]
-                await processing_msg.edit(content=parts[0])
-                for part in parts[1:]:
-                    await channel.send(part)
-            else:
-                await processing_msg.edit(content=formatted_response)
-                
-        except requests.RequestException as e:
-            logger.error(f"Error connecting to Ollama service: {e}")
-            await processing_msg.edit(
-                content=f"Error: Could not connect to the Ollama service. Please check if Ollama is running.")
-        except Exception as e:
-            logger.error(f"Error during song recommendation: {e}")
-            await channel.send(f"Error during song recommendation: {e}")
-    
-    def process_song_recommendations(self, ai_response):
-        """Process the AI response to format song recommendations better"""
-        # Create a more structured format for the recommendations
-        try:
-            # First, try to extract song information using regex patterns
-            import re
-            
-            # Clean up the response - remove any markdown formatting that might interfere
-            cleaned_response = ai_response.replace("*", "").replace(",\n", "\n").replace(".,", ".")
-            
-            # Initialize the formatted output
-            formatted_output = ""
-            
-            # Find all songs in the response
-            songs = re.findall(r'(?:Song Title:|^\d+\.\s+)([^,\n]+).*?Artist Name:([^,\n]+).*?Year of Release:([^,\n]+).*?YouTube Link:.*?\[(.*?)\]\((.*?)\).*?Description:([^,\n]+)', 
-                              cleaned_response, re.DOTALL | re.MULTILINE)
-            
-            # If no songs found with the pattern, try an alternative pattern
-            if not songs:
-                songs = re.findall(r'(?:Song Title:|^\d+\.\s+)([^,\n]+).*?Artist Name:([^,\n]+).*?Year of Release:([^,\n]+).*?YouTube Link:(?:\s+)?(https?://[^\s]+).*?Description:([^,\n]+)', 
-                                  cleaned_response, re.DOTALL | re.MULTILINE)
-            
-            # If still no songs found, try another pattern that might match the format
-            if not songs:
-                songs = re.findall(r'(?:Song Title:|^\d+\.\s+)(.*?)(?:Artist Name:|👤\s+Artist:)(.*?)(?:Year of Release:|📅\s+Year:)(.*?)(?:YouTube Link:|🎵\s+Link:)(.*?)(?:Description:|💬)(.*?)(?:\n\n|$)', 
-                                  cleaned_response, re.DOTALL | re.MULTILINE)
-            
-            # If still no songs found, return the original response
-            if not songs:
-                return ai_response
-            
-            # Format each song
-            for i, song in enumerate(songs, 1):
-                if len(song) >= 5:  # Make sure we have all the needed parts
-                    title = song[0].strip()
-                    artist = song[1].strip()
-                    year = song[2].strip()
-                    
-                    # Handle different link formats
-                    if len(song) == 6:  # First pattern with markdown link
-                        link_text = song[3].strip()
-                        link_url = song[4].strip()
-                        description = song[5].strip()
-                    else:  # Second pattern with direct URL
-                        link_url = song[3].strip()
-                        description = song[4].strip()
-                        link_text = "YouTube"
-                    
-                    # Extract URL from text if needed
-                    url_match = re.search(r'(https?://[^\s]+)', link_url)
-                    if url_match:
-                        link_url = url_match.group(1)
-                    
-                    # Clean up URL - remove trailing punctuation
-                    link_url = link_url.rstrip('.,;:!?')
-                    
-                    # Ensure the URL is properly formatted
-                    if not link_url.startswith(('http://', 'https://')):
-                        link_url = f"https://{link_url}"
-                    
-                    # Create a search query for Spotify
-                    spotify_query = f"{title} {artist}"
-                    
-                    # Format the song information
-                    formatted_output += f"**{i}. {title}**\n"
-                    formatted_output += f"👤 **Artist:** {artist}\n"
-                    formatted_output += f"📅 **Year:** {year}\n"
-                    # In Discord, plain URLs are automatically clickable
-                    formatted_output += f"🎵 **YouTube:** {link_url}\n"
-                    formatted_output += f"🎵 **Open in Spotify:** `!spotify {spotify_query}`\n"
-                    formatted_output += f"💬 **Why you'll like it:** {description}\n\n"
-            
-            # If we successfully formatted at least one song, return the formatted output
-            if formatted_output:
-                # Add a note about links
-                formatted_output += "**Note:** You can open any song in Spotify by using the `!spotify` command or click the YouTube links to listen online. Enjoy your music! 🎧"
-                return formatted_output
-            
-            # Fallback to original response if formatting failed
-            return ai_response
-            
-        except Exception as e:
-            logger.error(f"Error formatting song recommendations: {e}")
-            # Return the original response if there was an error in formatting
-            return ai_response
 
-    async def open_spotify_search(self, ctx, query):
-        """Open Spotify with the given search query or URL"""
-        try:
-            # Check if the query is a Spotify URL or URI
-            if query.startswith(("spotify:", "https://open.spotify.com/")):
-                # It's a direct Spotify URL/URI
-                if query.startswith("https://open.spotify.com/"):
-                    # Convert web URL to Spotify URI
-                    # Format: https://open.spotify.com/track/1234567890
-                    parts = query.split("/")
-                    if len(parts) >= 5:
-                        resource_type = parts[3]  # track, album, artist, playlist
-                        resource_id = parts[4].split("?")[0]  # Remove query parameters
-                        spotify_uri = f"spotify:{resource_type}:{resource_id}"
-                else:
-                    # Already a Spotify URI
-                    spotify_uri = query
-                
-                # Let the user know we're opening Spotify
-                await ctx.send(f"🎵 Opening Spotify link: **{query}**")
-                
-                # Use subprocess to open Spotify with the URI
-                import subprocess
-                subprocess.Popen(["/snap/bin/spotify", spotify_uri], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            else:
-                # It's a search query
-                # Encode the query for URL safety
-                import urllib.parse
-                encoded_query = urllib.parse.quote(query)
-                
-                # Create the Spotify search URL
-                spotify_url = f"spotify:search:{encoded_query}"
-                
-                # Let the user know we're opening Spotify
-                await ctx.send(f"🎵 Opening Spotify to search for: **{query}**")
-                
-                # Use subprocess to open Spotify with the search query
-                import subprocess
-                subprocess.Popen(["/snap/bin/spotify", spotify_url], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            
-            # Send success message
-            await ctx.send("Spotify should now be open with your request!")
-        except Exception as e:
-            logger.error(f"Error opening Spotify: {e}")
-            await ctx.send(f"Error opening Spotify: {e}")
+        # Function to check if the message is from the original user in the same channel
+        def check(message):
+            return message.author == ctx.author and message.channel == ctx.channel
 
-    async def handle_message(self, message):
-        """Enhanced message handler that can handle both image processing and song recommendations"""
-        logger.info(f'Incoming message: {message.content}')
-        user_id = str(message.author.id)
-        
-        # Check if the user is in an active song recommendation flow
-        if user_id in self.conversation_state:
-            current_state = self.conversation_state[user_id]
-            
-            # If they're in the song recommendation flow, process their response
-            if current_state.get('flow') == 'song_recommendation':
-                # Process their response according to the current question
-                question_idx = current_state.get('question_index', 0)
-                preferences = current_state.get('preferences', {})
-                
-                # Update preferences with user's response
-                questions = [
-                    {"key": "language", "question": "What language would you prefer for the songs?"},
-                    {"key": "genre", "question": "What genre of music do you like?"},
-                    {"key": "mood", "question": "What mood are you in?"},
-                    {"key": "era", "question": "From which time period would you prefer songs?"},
-                    {"key": "artist_type", "question": "Do you prefer solo artists or bands?"}
-                ]
-                
-                if question_idx < len(questions):
-                    # Store the user's answer to the current question
-                    preferences[questions[question_idx]["key"]] = message.content
-                    
-                    # Move to the next question
-                    question_idx += 1
-                    self.conversation_state[user_id]['question_index'] = question_idx
-                    self.conversation_state[user_id]['preferences'] = preferences
-                    
-                    # If there are more questions, ask the next one
-                    if question_idx < len(questions):
-                        await message.channel.send(questions[question_idx]["question"])
-                        return
-                    else:
-                        # All questions answered, generate recommendations
-                        await message.channel.send("Thanks for your preferences! Searching for song recommendations now... 🔍")
-                        
-                        # Create a prompt for Ollama
-                        prompt = f"""Based on the following preferences, recommend the top 5 songs:
+        try:
+            # Ask each question and wait for response
+            for q in questions:
+                await ctx.send(q["question"])
+                try:
+                    # Wait for user response with a timeout of 60 seconds
+                    response = await self.client.wait_for('message', check=check, timeout=60)
+                    preferences[q["key"]] = response.content
+                except asyncio.TimeoutError:
+                    await ctx.send("You took too long to respond. Song recommendation cancelled.")
+                    self.active_conversations.remove(ctx.author.id)  # Remove from active conversations
+                    return
+
+            # Confirmation message
+            await ctx.send("Thanks for your preferences! Searching for song recommendations now... 🔍")
+
+            # Create a prompt for Ollama
+            prompt = f"""Based on the following preferences, recommend the top 5 songs:
 - Language: {preferences['language']}
 - Genre: {preferences['genre']}
 - Mood: {preferences['mood']}
@@ -926,34 +697,222 @@ IMPORTANT:
 - Do not use shortened URLs or mobile (m.youtube.com) links
 - Verify that each song actually exists and matches the preferences
 - Do not include any markdown formatting in the links, just provide the plain URL
-"""
-                        # Clear the conversation state once we're done
-                        del self.conversation_state[user_id]
-                        
-                        # Send the request to Ollama
-                        await self.get_song_recommendations(message.channel, prompt, preferences)
-                        return
-                
-                return  # End early if in song recommendation flow
-        
-        # If not in a special flow, handle as a normal message
-        content = message.content.lower()
-        username = message.author.name
+- Only recommend songs that are actually available on YouTube
+- Test each YouTube link to ensure it's a valid, working link to an existing video
 
-        # Check for Spotify play commands (must check before super() call to avoid default responses)
-        play_match = re.search(r"^play\s+(.+)$", content)
-        if play_match:
-            query = play_match.group(1).strip()
-            if query:
-                await message.channel.send(f"🎵 I'll open Spotify to play: **{query}**")
-                await self.open_spotify_search(message.channel, query)
+Example of good formatting for one song:
+
+1. Song Title: Example Song
+Artist Name: Example Artist
+Year of Release: 2000
+YouTube Link: https://www.youtube.com/watch?v=dQw4w9WgXcQ
+Description: This upbeat track perfectly captures the happy mood with its catchy melody and energetic performance.
+"""
+
+            # Send the request to Ollama
+            await self.get_song_recommendations(ctx, prompt, preferences)
+        finally:
+            # Always remove from active conversations when done
+            if ctx.author.id in self.active_conversations:
+                self.active_conversations.remove(ctx.author.id)
+
+    async def get_song_recommendations(self, ctx, prompt, preferences):
+        """Get song recommendations from Ollama based on user preferences"""
+        # Let the user know we're working on it
+        processing_msg = await ctx.send("🎧 Finding the perfect songs for you... Please wait.")
+
+        try:
+            # Prepare the data for the Ollama API
+            data = {
+                "model": self.ollama_model,
+                "messages": [{"role": "user", "content": prompt}],
+                "stream": False
+            }
+
+            # The correct endpoint is /api/chat for chat-based interactions
+            api_endpoint = self.ollama_url
+            if not api_endpoint.endswith('/api/chat'):
+                api_endpoint = api_endpoint.rstrip('/') + '/api/chat'
+
+            # Send the request to the Ollama API
+            response = requests.post(
+                api_endpoint,
+                json=data,
+                headers={"Content-Type": "application/json"},
+                timeout=180  # Updated timeout to 3 minutes
+            )
+
+            # Check if the request was successful
+            if response.status_code != 200:
+                logger.error(f"[ERROR] Ollama returned status code {response.status_code}")
+                logger.error(f"[ERROR] Response content: {response.text}")
+                await processing_msg.edit(
+                    content=f"Error: Couldn't get song recommendations. Please try again later.")
                 return
 
-        # Handle greetings and other typical messages using the parent class implementation
-        await super().handle_message(message)
-        
-        # Check for keywords related to song recommendations
-        song_keywords = ["song", "music", "recommend", "playlist", "track", "artist", "singer", "band", "album"]
-        if any(keyword in content for keyword in song_keywords) and "songrec" not in content and not content.startswith("play"):
-            await message.channel.send(f"Would you like me to recommend some songs based on your preferences, {username}? Try using the `!songrec` command!")
-            return
+            # Parse the result
+            result = response.json()
+
+            # Extract the response
+            ai_response = result.get("message", {}).get("content", "I couldn't generate song recommendations.")
+
+            # Process the AI response to format it better and fix links
+            processed_response = self.process_song_recommendations(ai_response)
+
+            # Format the response with a header
+            formatted_response = f"**🎵 Song Recommendations Based On Your Preferences 🎵**\n\n"
+            formatted_response += f"**Language:** {preferences['language']}\n"
+            formatted_response += f"**Genre:** {preferences['genre']}\n"
+            formatted_response += f"**Mood:** {preferences['mood']}\n"
+            formatted_response += f"**Era:** {preferences['era']}\n"
+            formatted_response += f"**Artist Type:** {preferences['artist_type']}\n\n"
+            formatted_response += processed_response
+
+            # Discord has a 2000 character limit
+            if len(formatted_response) > 1990:
+                # Split into multiple messages if too long
+                parts = [formatted_response[i:i + 1990] for i in range(0, len(formatted_response), 1990)]
+                await processing_msg.edit(content=parts[0])
+                for part in parts[1:]:
+                    await ctx.send(part)
+            else:
+                await processing_msg.edit(content=formatted_response)
+
+        except requests.RequestException as e:
+            logger.error(f"Error connecting to Ollama service: {e}")
+            await processing_msg.edit(
+                content=f"Error: Could not connect to the Ollama service. Please check if Ollama is running.")
+        except Exception as e:
+            logger.error(f"Error during song recommendation: {e}")
+            await ctx.send(f"Error during song recommendation: {e}")
+
+    def process_song_recommendations(self, ai_response):
+        """Process the AI response to format song recommendations better"""
+        # Create a more structured format for the recommendations
+        try:
+            # First, try to extract song information using regex patterns
+            import re
+
+            # Clean up the response - remove any markdown formatting that might interfere
+            cleaned_response = ai_response.replace("*", "").replace(",\n", "\n").replace(".,", ".")
+
+            # Initialize the formatted output
+            formatted_output = ""
+
+            # Find all songs in the response
+            songs = re.findall(
+                r'(?:Song Title:|^\d+\.\s+)([^,\n]+).*?Artist Name:([^,\n]+).*?Year of Release:([^,\n]+).*?YouTube Link:.*?\[(.*?)\]\((.*?)\).*?Description:([^,\n]+)',
+                cleaned_response, re.DOTALL | re.MULTILINE)
+
+            # If no songs found with the pattern, try an alternative pattern
+            if not songs:
+                songs = re.findall(
+                    r'(?:Song Title:|^\d+\.\s+)([^,\n]+).*?Artist Name:([^,\n]+).*?Year of Release:([^,\n]+).*?YouTube Link:(?:\s+)?(https?://[^\s]+).*?Description:([^,\n]+)',
+                    cleaned_response, re.DOTALL | re.MULTILINE)
+
+            # If still no songs found, try another pattern that might match the format
+            if not songs:
+                songs = re.findall(
+                    r'(?:Song Title:|^\d+\.\s+)(.*?)(?:Artist Name:|👤\s+Artist:)(.*?)(?:Year of Release:|📅\s+Year:)(.*?)(?:YouTube Link:|🎵\s+Link:)(.*?)(?:Description:|💬)(.*?)(?:\n\n|$)',
+                    cleaned_response, re.DOTALL | re.MULTILINE)
+
+            # If still no songs found, return the original response
+            if not songs:
+                return ai_response
+
+            # Format each song
+            for i, song in enumerate(songs, 1):
+                if len(song) >= 5:  # Make sure we have all the needed parts
+                    title = song[0].strip()
+                    artist = song[1].strip()
+                    year = song[2].strip()
+
+                    # Handle different link formats
+                    if len(song) == 6:  # First pattern with markdown link
+                        link_text = song[3].strip()
+                        link_url = song[4].strip()
+                        description = song[5].strip()
+                    else:  # Second pattern with direct URL
+                        link_url = song[3].strip()
+                        description = song[4].strip()
+
+                    # Format the song information
+                    formatted_output += f"**{i}. {title}** by {artist} ({year})\n"
+                    formatted_output += f"🎬 [Watch on YouTube]({link_url})\n"
+
+                    # Add Spotify link
+                    spotify_search = f"{title} {artist}".replace(' ', '%20')
+                    spotify_app_link = f"spotify:search:{spotify_search}"
+                    spotify_web_link = f"https://open.spotify.com/search/{spotify_search}/tracks"
+                    formatted_output += f"🎵 [Open in Spotify]({spotify_app_link}) | [Web]({spotify_web_link})\n"
+
+                    formatted_output += f"💬 {description}\n\n"
+
+            return formatted_output
+
+        except Exception as e:
+            logger.error(f"Error formatting song recommendations: {e}")
+            # Return the original response if there was an error in formatting
+            return ai_response
+
+    async def spotify_search(self, ctx, search_type, search_query):
+        """Search for content on Spotify and provide a link that opens in the Spotify app"""
+        # Validate search type
+        valid_types = ['track', 'artist', 'album', 'playlist']
+        if search_type not in valid_types:
+            await ctx.send(f"Invalid search type: {search_type}. Valid types are: {', '.join(valid_types)}")
+            search_type = 'track'  # Default to track if invalid type
+            await ctx.send(f"Defaulting to search type: track")
+
+        # Let the user know we're searching
+        await ctx.send(f"🔍 Searching Spotify for {search_type}: **{search_query}**")
+
+        try:
+            # Format the search query for a URL
+            formatted_query = search_query.replace(' ', '%20')
+
+            # Create Spotify links based on search type - using web links that will redirect to app
+            if search_type == 'track':
+                # For tracks, use the web links that will redirect to the app when clicked
+                spotify_web_link = f"https://open.spotify.com/search/{formatted_query}"
+                specific_track_link = f"https://open.spotify.com/search/track:{formatted_query}"
+            elif search_type == 'artist':
+                spotify_web_link = f"https://open.spotify.com/search/artist:{formatted_query}"
+            elif search_type == 'album':
+                spotify_web_link = f"https://open.spotify.com/search/album:{formatted_query}"
+            elif search_type == 'playlist':
+                spotify_web_link = f"https://open.spotify.com/search/playlist:{formatted_query}"
+
+            # Create a message with the links
+            message = (
+                f"**🎵 Spotify Search Results for {search_type}: {search_query}**\n\n"
+                f"**Open in Spotify:** [Click here]({spotify_web_link})\n"
+            )
+
+            # Add specific track link if searching for a track
+            if search_type == 'track':
+                message += (
+                    f"**Direct track search:** [Open track]({specific_track_link})\n\n"
+                )
+
+            # Add instructions for copying the Spotify URI manually
+            if search_type == 'track':
+                spotify_uri = f"spotify:search:track:{formatted_query}"
+            elif search_type == 'artist':
+                spotify_uri = f"spotify:search:artist:{formatted_query}"
+            elif search_type == 'album':
+                spotify_uri = f"spotify:search:album:{formatted_query}"
+            elif search_type == 'playlist':
+                spotify_uri = f"spotify:search:playlist:{formatted_query}"
+
+            message += (
+                f"**Copy this Spotify URI to open directly in the app:**\n"
+                f"`{spotify_uri}`\n\n"
+                f"*Note: The web links will open in your browser first, then redirect to the Spotify app if installed.*"
+            )
+
+            await ctx.send(message)
+
+        except Exception as e:
+            logger.error(f"Error during Spotify search: {e}")
+            await ctx.send(f"Error during Spotify search: {e}")
