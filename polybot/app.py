@@ -13,8 +13,7 @@ load_dotenv()
 # Get the token from .env
 DISCORD_BOT_TOKEN = os.environ.get('DISCORD_BOT_TOKEN')
 YOLO_URL = os.environ.get('YOLO_URL', 'http://10.0.1.90:8081/predict')
-# Try both private and public IP addresses for Ollama
-OLLAMA_URL = os.environ.get('OLLAMA_URL', 'http://35.86.203.133:11434/api/chat')
+OLLAMA_URL = os.environ.get('OLLAMA_URL', 'http://10.0.0.136:11434/api/chat')
 OLLAMA_MODEL = os.environ.get('OLLAMA_MODEL', 'gemma3:1b')
 STATUS_SERVER_PORT = int(os.environ.get('STATUS_SERVER_PORT', 8443))
 
