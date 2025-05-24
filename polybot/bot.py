@@ -14,6 +14,7 @@ import asyncio
 import subprocess
 import shutil
 import webbrowser
+import platform
 
 
 class Bot:
@@ -794,13 +795,14 @@ class ImageProcessingBot(Bot):
                     if not link_url.startswith(('http://', 'https://')):
                         link_url = f"https://{link_url}"
                     
-                    # Create a search query for Spotify
-                    spotify_query = f"{title} {artist}"
-                    
                     # URL encode for web search
                     import urllib.parse
                     encoded_query = urllib.parse.quote(f"{title} {artist}")
                     spotify_web_url = f"https://open.spotify.com/search/{encoded_query}"
+                    
+                    # Also create a track-specific query for better results
+                    track_query = f"track:{urllib.parse.quote(title)} artist:{urllib.parse.quote(artist)}"
+                    spotify_track_url = f"https://open.spotify.com/search/{track_query}"
                     
                     # Format the song information
                     formatted_output += f"**{i}. {title}**\n"
@@ -808,7 +810,7 @@ class ImageProcessingBot(Bot):
                     formatted_output += f"📅 **Year:** {year}\n"
                     # In Discord, plain URLs are automatically clickable
                     formatted_output += f"🎵 **YouTube:** {link_url}\n"
-                    formatted_output += f"🎵 **Spotify:** [Open in Web]({spotify_web_url}) or use `!spotify {spotify_query}`\n"
+                    formatted_output += f"🎵 **Spotify:** [Open in Web]({spotify_web_url}) or use `!spotify {title} by {artist}`\n"
                     formatted_output += f"💬 **Why you'll like it:** {description}\n\n"
             
             # If we successfully formatted at least one song, return the formatted output
@@ -828,12 +830,67 @@ class ImageProcessingBot(Bot):
     async def open_spotify_search(self, ctx, query):
         """Open Spotify with the given search query or URL"""
         try:
-            # Check if Spotify is installed
-            spotify_installed = shutil.which("spotify") is not None
+            # More robust Spotify detection
+            system = platform.system()
+            spotify_installed = False
+            spotify_path = None
             
-            # Check if the query is a Spotify URL or URI
+            # Check for Spotify installation based on operating system
+            if system == "Linux":
+                # Check common Linux paths for Spotify
+                possible_paths = [
+                    "/snap/bin/spotify",
+                    "/usr/bin/spotify",
+                    "/usr/local/bin/spotify",
+                    os.path.expanduser("~/.local/bin/spotify")
+                ]
+                for path in possible_paths:
+                    if os.path.exists(path) and os.access(path, os.X_OK):
+                        spotify_installed = True
+                        spotify_path = path
+                        break
+                
+                # Alternative detection method
+                if not spotify_installed:
+                    try:
+                        result = subprocess.run(["which", "spotify"], capture_output=True, text=True, check=False)
+                        if result.returncode == 0 and result.stdout.strip():
+                            spotify_installed = True
+                            spotify_path = result.stdout.strip()
+                    except Exception:
+                        pass
+            elif system == "Windows":
+                # Check Windows common paths
+                possible_paths = [
+                    os.path.expandvars("%APPDATA%\\Spotify\\Spotify.exe"),
+                    "C:\\Program Files\\Spotify\\Spotify.exe",
+                    "C:\\Program Files (x86)\\Spotify\\Spotify.exe"
+                ]
+                for path in possible_paths:
+                    if os.path.exists(path):
+                        spotify_installed = True
+                        spotify_path = path
+                        break
+            elif system == "Darwin":  # macOS
+                possible_paths = [
+                    "/Applications/Spotify.app/Contents/MacOS/Spotify",
+                    os.path.expanduser("~/Applications/Spotify.app/Contents/MacOS/Spotify")
+                ]
+                for path in possible_paths:
+                    if os.path.exists(path):
+                        spotify_installed = True
+                        spotify_path = path
+                        break
+            
+            logger.info(f"Spotify detection: installed={spotify_installed}, path={spotify_path}")
+            
+            # Format the search query for both web and app
+            # Handle different types of queries
+            is_direct_link = False
+            
             if query.startswith(("spotify:", "https://open.spotify.com/")):
                 # It's a direct Spotify URL/URI
+                is_direct_link = True
                 if query.startswith("https://open.spotify.com/"):
                     # It's already a web URL, we can use it directly for web browser
                     web_url = query
@@ -855,34 +912,105 @@ class ImageProcessingBot(Bot):
                         spotify_uri = query
             else:
                 # It's a search query
+                # Check if it has the format "Song by Artist"
+                by_match = re.search(r"^(.*?)\s+by\s+(.*?)$", query, re.IGNORECASE)
+                if by_match:
+                    song = by_match.group(1).strip()
+                    artist = by_match.group(2).strip()
+                    search_term = f"track:{song} artist:{artist}"
+                    display_query = f"{song} by {artist}"
+                else:
+                    search_term = query
+                    display_query = query
+                
                 # Encode the query for URL safety
                 import urllib.parse
-                encoded_query = urllib.parse.quote(query)
+                encoded_query = urllib.parse.quote(search_term)
                 
                 # Create the Spotify search URL/URI
                 spotify_uri = f"spotify:search:{encoded_query}"
                 web_url = f"https://open.spotify.com/search/{encoded_query}"
             
             # Open Spotify based on availability
-            if spotify_installed:
-                # Let the user know we're opening the desktop app
-                await ctx.send(f"🎵 Opening Spotify app to search for: **{query}**")
-                # Use subprocess to open Spotify with the URI
-                subprocess.Popen(["/snap/bin/spotify", spotify_uri], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                success_msg = "Spotify desktop app should now be open with your request!"
-            else:
-                # Let the user know we're opening the web version
-                await ctx.send(f"🎵 Opening Spotify Web to search for: **{query}**")
-                # Open the web browser with the Spotify web URL
-                webbrowser.open(web_url)
-                success_msg = "Spotify Web should now be open in your browser with your request!"
+            success = False
             
-            # Send success message
-            await ctx.send(success_msg)
+            if spotify_installed and spotify_path:
+                try:
+                    # Let the user know we're opening the desktop app
+                    message = await ctx.send(f"🎵 Opening Spotify app to search for: **{query}**")
+                    
+                    # Use subprocess to open Spotify with the URI
+                    if system == "Windows":
+                        # Windows needs a different approach
+                        if is_direct_link:
+                            os.startfile(spotify_uri)
+                        else:
+                            subprocess.Popen([spotify_path, "--uri=" + spotify_uri], 
+                                           stdout=subprocess.PIPE, 
+                                           stderr=subprocess.PIPE,
+                                           creationflags=subprocess.CREATE_NO_WINDOW)
+                    elif system == "Darwin":  # macOS
+                        subprocess.Popen(["open", "-a", "Spotify", spotify_uri], 
+                                       stdout=subprocess.PIPE, 
+                                       stderr=subprocess.PIPE)
+                    else:  # Linux
+                        # Use the detected Spotify path with the URI
+                        subprocess.Popen([spotify_path, spotify_uri], 
+                                       stdout=subprocess.PIPE, 
+                                       stderr=subprocess.PIPE)
+                    
+                    success = True
+                    await message.edit(content=f"✅ Spotify desktop app should now be open with your request!")
+                except Exception as e:
+                    logger.error(f"Error opening Spotify desktop app: {e}")
+                    # If desktop app fails, we'll fall back to browser
+                    await ctx.send(f"❌ Couldn't open Spotify desktop app: {e}. Trying web browser instead...")
             
+            # If desktop app didn't work or isn't installed, try the browser
+            if not success:
+                try:
+                    # Let the user know we're opening the web version
+                    message = await ctx.send(f"🎵 Opening Spotify Web to search for: **{query}**")
+                    
+                    # Make sure the URL is properly formatted
+                    if not web_url.startswith("http"):
+                        web_url = "https://open.spotify.com/search/" + urllib.parse.quote(query)
+                    
+                    # Open in a new browser window
+                    if system == "Linux":
+                        # On Linux, use xdg-open if available
+                        try:
+                            # Try to use xdg-open for Linux
+                            subprocess.Popen(["xdg-open", web_url], 
+                                           stdout=subprocess.PIPE, 
+                                           stderr=subprocess.PIPE)
+                            success = True
+                        except Exception as browser_err:
+                            logger.error(f"Error using xdg-open: {browser_err}")
+                            # Fallback to webbrowser module
+                            webbrowser.open_new(web_url)
+                    else:
+                        # On Windows and macOS, use webbrowser module
+                        webbrowser.open_new(web_url)
+                    
+                    await message.edit(content=f"✅ Spotify Web should now be open in your browser!")
+                    success = True
+                except Exception as e:
+                    logger.error(f"Error opening Spotify web: {e}")
+                    await ctx.send(f"❌ Error opening Spotify in web browser: {e}")
+            
+            # If both methods failed, provide a direct link the user can click
+            if not success:
+                # Create a clickable link as last resort
+                await ctx.send(f"⚠️ Both desktop and web methods failed. Please try opening this link manually: {web_url}")
+                
         except Exception as e:
-            logger.error(f"Error opening Spotify: {e}")
-            await ctx.send(f"Error opening Spotify: {e}. Try opening https://open.spotify.com/ manually.")
+            logger.error(f"Error in Spotify functionality: {e}")
+            # Provide a direct link as fallback
+            import urllib.parse
+            encoded_query = urllib.parse.quote(query)
+            fallback_url = f"https://open.spotify.com/search/{encoded_query}"
+            await ctx.send(f"⚠️ Error in Spotify functionality: {e}\nPlease try opening this link manually: {fallback_url}")
 
     async def handle_message(self, message):
         """Enhanced message handler that can handle both image processing and song recommendations"""
@@ -966,6 +1094,8 @@ IMPORTANT:
         if play_match:
             query = play_match.group(1).strip()
             if query:
+                # Log the play request for debugging
+                logger.info(f"Play request detected: '{query}'")
                 await message.channel.send(f"🎵 I'll open Spotify to play: **{query}**")
                 await self.open_spotify_search(message.channel, query)
                 return
