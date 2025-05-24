@@ -360,7 +360,7 @@ class ImageProcessingBot(Bot):
         logger.info(f"YOLO service URL set to: {self.yolo_url}")
 
         # Define the Ollama service URL - can be overridden in environment variables
-        self.ollama_url = ollama_url or os.environ.get('OLLAMA_URL', 'http://10.0.1.33:11434/api/chat')
+        self.ollama_url = ollama_url or os.environ.get('OLLAMA_URL', 'http://35.86.203.133:11434/api/chat')
         self.ollama_model = os.environ.get('OLLAMA_MODEL', 'gemma3:1b')
         logger.info(f"Ollama service URL set to: {self.ollama_url}")
         logger.info(f"Ollama model set to: {self.ollama_model}")
