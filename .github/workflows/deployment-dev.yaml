@@ -39,9 +39,9 @@ jobs:
       - name: Clone or Pull Code on Dev EC2
         run: |
           ssh polydev "if [ -d ~/${REPO_NAME} ]; then
-                        cd ~/${REPO_NAME} && git pull;
+                        cd ~/${REPO_NAME} && git pull origin dev;
                       else
-                        git clone ${REPO_URL} ~/${REPO_NAME};
+                        git clone --branch dev ${REPO_URL} ~/${REPO_NAME};
                       fi"
 
       - name: Run Deployment Script on Dev EC2
