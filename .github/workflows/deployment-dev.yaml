@@ -21,9 +21,9 @@ jobs:
 
       - name: Configure SSH for Dev
         env:
-          SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY_DEV }}
+          SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
           EC2_HOST: ${{ secrets.POLYBOT_EC2_HOST_DEV }}
-          EC2_USERNAME: ${{ secrets.EC2_USERNAME_DEV }}
+          EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
         run: |
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/private_key
