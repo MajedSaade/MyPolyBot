@@ -65,43 +65,37 @@ pip install -r "$APP_DIR/polybot/requirements.txt"
 # Set up environment variables
 echo "Setting up environment variables..."
 
-# Create or update .env.dev file with token from environment variable
+# Create or update .env file with token from environment variable
 if [ -n "$DISCORD_BOT_TOKEN" ]; then
   echo "Using Discord bot token from environment variable..."
-  echo "DISCORD_BOT_TOKEN=$DISCORD_BOT_TOKEN" > "$APP_DIR/.env.dev"
-  echo "YOLO_URL=http://10.0.1.90:8081/predict" >> "$APP_DIR/.env.dev"
-  echo "OLLAMA_URL=http://10.0.0.136:11434/api/chat" >> "$APP_DIR/.env.dev"
-  echo "OLLAMA_MODEL=gemma3:1b" >> "$APP_DIR/.env.dev"
-  echo "STATUS_SERVER_PORT=8443" >> "$APP_DIR/.env.dev"
+  echo "DISCORD_BOT_TOKEN=$DISCORD_BOT_TOKEN" > "$APP_DIR/.env"
+  echo "YOLO_URL=http://10.0.1.90:8081/predict" >> "$APP_DIR/.env"
+  echo "OLLAMA_URL=http://10.0.0.136:11434/api/chat" >> "$APP_DIR/.env"
+  echo "OLLAMA_MODEL=gemma3:1b" >> "$APP_DIR/.env"
+  echo "STATUS_SERVER_PORT=8443" >> "$APP_DIR/.env"
 else
-  # Check if .env.dev exists and has DISCORD_BOT_TOKEN
-  if [ ! -f "$APP_DIR/.env.dev" ] || ! grep -q "DISCORD_BOT_TOKEN=" "$APP_DIR/.env.dev" || [ "$(grep "DISCORD_BOT_TOKEN=" "$APP_DIR/.env.dev" | cut -d= -f2)" = "" ]; then
-    # Try to copy from .env if it exists
-    if [ -f "$APP_DIR/.env" ]; then
-      echo "Copying .env to .env.dev..."
-      cp "$APP_DIR/.env" "$APP_DIR/.env.dev"
-    else
-      echo "Creating .env.dev file with empty token (you'll need to fill this in)..."
-      echo "DISCORD_BOT_TOKEN=" > "$APP_DIR/.env.dev"
-      echo "YOLO_URL=http://10.0.1.90:8081/predict" >> "$APP_DIR/.env.dev"
-      echo "OLLAMA_URL=http://10.0.0.136:11434/api/chat" >> "$APP_DIR/.env.dev"
-      echo "OLLAMA_MODEL=gemma3:1b" >> "$APP_DIR/.env.dev"
-      echo "STATUS_SERVER_PORT=8443" >> "$APP_DIR/.env.dev"
-    
-      echo "⚠️ WARNING: You need to edit the .env.dev file and add your Discord bot token"
-      echo "The bot will not work until you do this and restart the service."
-    fi
+  # Check if .env exists and has DISCORD_BOT_TOKEN
+  if [ ! -f "$APP_DIR/.env" ] || ! grep -q "DISCORD_BOT_TOKEN=" "$APP_DIR/.env" || [ "$(grep "DISCORD_BOT_TOKEN=" "$APP_DIR/.env" | cut -d= -f2)" = "" ]; then
+    echo "Creating .env file with empty token (you'll need to fill this in)..."
+    echo "DISCORD_BOT_TOKEN=" > "$APP_DIR/.env"
+    echo "YOLO_URL=http://10.0.1.90:8081/predict" >> "$APP_DIR/.env"
+    echo "OLLAMA_URL=http://10.0.0.136:11434/api/chat" >> "$APP_DIR/.env"
+    echo "OLLAMA_MODEL=gemma3:1b" >> "$APP_DIR/.env"
+    echo "STATUS_SERVER_PORT=8443" >> "$APP_DIR/.env"
+  
+    echo "⚠️ WARNING: You need to edit the .env file and add your Discord bot token"
+    echo "The bot will not work until you do this and restart the service."
   fi
 fi
 
 # Display current environment settings
 echo "Current environment variables:"
-echo "DISCORD_BOT_TOKEN: $(if grep -q "DISCORD_BOT_TOKEN=" "$APP_DIR/.env.dev" && [ "$(grep "DISCORD_BOT_TOKEN=" "$APP_DIR/.env.dev" | cut -d= -f2)" != "" ]; then echo "is set"; else echo "not set"; fi)"
-echo "YOLO_URL: $(grep "YOLO_URL=" "$APP_DIR/.env.dev" | cut -d= -f2)"
-echo "OLLAMA_URL: $(grep "OLLAMA_URL=" "$APP_DIR/.env.dev" | cut -d= -f2)"
+echo "DISCORD_BOT_TOKEN: $(if grep -q "DISCORD_BOT_TOKEN=" "$APP_DIR/.env" && [ "$(grep "DISCORD_BOT_TOKEN=" "$APP_DIR/.env" | cut -d= -f2)" != "" ]; then echo "is set"; else echo "not set"; fi)"
+echo "YOLO_URL: $(grep "YOLO_URL=" "$APP_DIR/.env" | cut -d= -f2)"
+echo "OLLAMA_URL: $(grep "OLLAMA_URL=" "$APP_DIR/.env" | cut -d= -f2)"
 
-# Make sure permissions are correct for .env.dev
-chmod 600 "$APP_DIR/.env.dev"
+# Make sure permissions are correct for .env
+chmod 600 "$APP_DIR/.env"
 
 # Create a modified service file with correct paths
 echo "Preparing service file..."
@@ -120,7 +114,7 @@ ExecStart=$VENV_PATH/bin/python -m polybot.app
 Restart=always
 RestartSec=10
 Environment=PYTHONUNBUFFERED=1
-EnvironmentFile=$APP_DIR/.env.dev
+EnvironmentFile=$APP_DIR/.env
 
 [Install]
 WantedBy=multi-user.target
