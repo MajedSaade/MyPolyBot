@@ -5,19 +5,8 @@ set -e  # Exit on any error
 # Configuration
 SERVICE_NAME=polybot-dev.service
 SERVICE_PATH=/etc/systemd/system/$SERVICE_NAME
-
-# Get the current user's home directory and use that for paths
-USER_HOME=$(eval echo ~$(whoami))
 APP_DIR=$(pwd)  # Use current directory instead of hardcoded path
 VENV_PATH=$APP_DIR/.venv
-
-# Debug information
-echo "DEBUG: Current working directory: $(pwd)"
-echo "DEBUG: User home: $USER_HOME"
-echo "DEBUG: App directory: $APP_DIR"
-echo "DEBUG: Virtual env path: $VENV_PATH"
-echo "DEBUG: Current user: $(whoami)"
-ls -la
 
 echo "Deploying PolyBot from directory: $APP_DIR"
 
@@ -38,33 +27,20 @@ if ! python3 -m venv --help > /dev/null 2>&1; then
     sudo apt-get install -y python3-venv
 fi
 
-# Debug: Check if venv directory exists before trying to create it
-echo "DEBUG: Does venv path exist? $([ -d "$VENV_PATH" ] && echo "Yes" || echo "No")"
-
 # Setup virtual environment if it doesn't exist
 if [ ! -d "$VENV_PATH" ]; then
     echo "Creating virtual environment..."
     mkdir -p "$(dirname "$VENV_PATH")"
     python3 -m venv $VENV_PATH
-    echo "DEBUG: Virtual environment created. Contents:"
-    ls -la $VENV_PATH/bin
 fi
-
-# Debug: Check if venv/bin directory exists and has pip
-echo "DEBUG: Checking venv/bin contents:"
-ls -la $VENV_PATH/bin || echo "Failed to list venv/bin"
 
 # Activate and install/update all dependencies
 echo "Installing/updating dependencies..."
-echo "DEBUG: About to activate virtual environment"
 source $VENV_PATH/bin/activate
-echo "DEBUG: Virtual environment activated. Python path: $(which python)"
-
 python -m pip install --upgrade pip
 python -m pip install -r $APP_DIR/polybot/requirements.txt
 python -m pip install python-dotenv fastapi uvicorn
 deactivate
-echo "DEBUG: Virtual environment deactivated"
 
 # Create .env.dev file if it doesn't exist
 if [ ! -f "$APP_DIR/.env.dev" ]; then
@@ -82,14 +58,11 @@ EOL
     echo ".env.dev file created. Please edit it with your actual credentials."
 fi
 
-# Copy the service file
+# Copy the service file and update paths
 echo "Installing service file..."
-# Make a temporary copy of the service file with correct paths
 cat $APP_DIR/$SERVICE_NAME > /tmp/$SERVICE_NAME.tmp
 sed -i "s|User=ubuntu|User=$(whoami)|g" /tmp/$SERVICE_NAME.tmp
 sed -i "s|/home/ubuntu/MyPolyBot|$APP_DIR|g" /tmp/$SERVICE_NAME.tmp
-echo "DEBUG: Service file contents after modification:"
-cat /tmp/$SERVICE_NAME.tmp
 
 # Install the updated service file
 sudo cp /tmp/$SERVICE_NAME.tmp $SERVICE_PATH
