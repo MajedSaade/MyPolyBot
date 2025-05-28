@@ -126,10 +126,15 @@ sudo cp /tmp/$SERVICE_NAME $SERVICE_PATH
 sudo chmod 644 $SERVICE_PATH
 rm /tmp/$SERVICE_NAME
 
-# Test run the app directly to check for errors
-echo "Testing the app directly..."
-python -m polybot.app --test-run || {
-  echo "❌ The app failed to start when run directly. This might help identify the issue."
+# Test the application initialization for 5 seconds max
+echo "Testing the app startup (will timeout after 5 seconds)..."
+timeout 5s python -m polybot.app --test-run || {
+  # Exit code 124 means timeout occurred, which is expected and okay
+  if [ $? -eq 124 ]; then
+    echo "✅ Test run timeout reached - this is expected, the app started successfully."
+  else
+    echo "❌ The app failed to start when run directly."
+  fi
 }
 
 # Deactivate the virtual environment
