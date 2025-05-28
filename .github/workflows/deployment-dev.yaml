@@ -5,7 +5,7 @@ on:
   push:
     branches:
       - dev
-      - dev_setup
+      - feature/dev_setup
   workflow_dispatch:
 
 env:

@@ -2,7 +2,7 @@
 
 set -e  # Exit on any error
 
-# Configuration for dev environment
+# Configuration
 SERVICE_NAME=polybot-dev.service
 SERVICE_PATH=/etc/systemd/system/$SERVICE_NAME
 APP_DIR=/home/ubuntu/MyPolyBot
@@ -16,38 +16,46 @@ sudo mkdir -p $(dirname $SERVICE_PATH)
 if ! command -v python3 &>/dev/null; then
     echo "Installing Python3..."
     sudo apt-get update
-    sudo apt-get install -y python3-venv python3.12-venv
+    sudo apt-get install -y python3 python3-pip python3-venv
+else
+    echo "Python3 already installed."
 fi
 
-# Ensure virtual environment exists
+# Ensure python3-venv is available
+if ! python3 -m venv --help > /dev/null 2>&1; then
+    echo "Installing python3-venv..."
+    sudo apt-get install -y python3-venv
+fi
+
+# Create virtual environment if not present
 if [ ! -d "$VENV_PATH" ]; then
     echo "Creating virtual environment..."
     python3 -m venv $VENV_PATH
 fi
 
-# Activate and install/update all dependencies
+# Activate and install dependencies
 echo "Installing/updating dependencies..."
 $VENV_PATH/bin/pip install --upgrade pip
 $VENV_PATH/bin/pip install -r $APP_DIR/polybot/requirements.txt
 $VENV_PATH/bin/pip install python-dotenv fastapi uvicorn
 
-# Copy the dev service file
-echo "Installing dev service file..."
+# Install systemd service
+echo "Installing service file..."
 sudo cp $APP_DIR/$SERVICE_NAME $SERVICE_PATH
 sudo chmod 644 $SERVICE_PATH
 
-# Reload systemd and restart/enable the dev bot service
+# Reload systemd and restart/enable service
 echo "Configuring systemd service..."
 sudo systemctl daemon-reload
 sudo systemctl enable $SERVICE_NAME
 sudo systemctl restart $SERVICE_NAME
 
-# Check if the dev service is running
+# Check status
 echo "Checking service status..."
 if ! systemctl is-active --quiet $SERVICE_NAME; then
     echo "❌ $SERVICE_NAME failed to start. Checking logs..."
     sudo systemctl status $SERVICE_NAME --no-pager
-    echo "Full logs available with: sudo journalctl -u $SERVICE_NAME"
+    echo "Full logs: sudo journalctl -u $SERVICE_NAME"
     exit 1
 fi
 
