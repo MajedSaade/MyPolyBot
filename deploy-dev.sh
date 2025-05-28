@@ -13,30 +13,35 @@ echo "Creating necessary directories..."
 sudo mkdir -p $(dirname $SERVICE_PATH)
 
 # Install Python and required packages if needed
-if ! command -v python3 &>/dev/null; then
-    echo "Installing Python3..."
-    sudo apt-get update
-    sudo apt-get install -y python3 python3-pip python3-venv
+echo "Ensuring Python and dependencies are installed..."
+sudo apt-get update
+sudo apt-get install -y python3 python3-pip python3-venv
+
+# Remove existing virtual environment if it exists
+if [ -d "$VENV_PATH" ]; then
+    echo "Removing existing virtual environment..."
+    rm -rf $VENV_PATH
 fi
 
-# Ensure python3-venv is installed for creating virtual environments
-if ! python3 -m venv --help > /dev/null 2>&1; then
-    echo "Installing python3-venv..."
-    sudo apt-get install -y python3-venv
-fi
+# Create fresh virtual environment
+echo "Creating virtual environment..."
+python3 -m venv $VENV_PATH
 
-# Setup virtual environment if it doesn't exist
-if [ ! -d "$VENV_PATH" ]; then
-    echo "Creating virtual environment..."
-    python3 -m venv $VENV_PATH
+# Check if virtual environment was created successfully
+if [ ! -f "$VENV_PATH/bin/python" ]; then
+    echo "Failed to create virtual environment. Trying alternate method..."
+    python3 -m venv --without-pip $VENV_PATH
+    curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+    $VENV_PATH/bin/python get-pip.py
+    rm get-pip.py
 fi
 
 # Activate and install/update all dependencies
 echo "Installing/updating dependencies..."
 source $VENV_PATH/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r $APP_DIR/polybot/requirements.txt
-python -m pip install python-dotenv fastapi uvicorn
+pip install --upgrade pip
+pip install -r $APP_DIR/polybot/requirements.txt
+pip install python-dotenv fastapi uvicorn
 deactivate
 
 # Copy the service file
