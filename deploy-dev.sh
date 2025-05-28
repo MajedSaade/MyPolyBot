@@ -27,9 +27,11 @@ fi
 
 # Activate and install/update all dependencies
 echo "Installing/updating dependencies..."
-$VENV_PATH/bin/pip install --upgrade pip
-$VENV_PATH/bin/pip install -r $APP_DIR/polybot/requirements.txt
-$VENV_PATH/bin/pip install python-dotenv fastapi uvicorn
+source $VENV_PATH/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r $APP_DIR/polybot/requirements.txt
+python -m pip install python-dotenv fastapi uvicorn
+deactivate
 
 # Copy the service file
 echo "Installing service file..."
