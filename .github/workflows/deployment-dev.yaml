@@ -39,10 +39,14 @@ jobs:
 
       - name: Clone or Pull Code on Dev EC2
         run: |
+          # Get the current branch name that triggered the workflow
+          BRANCH_NAME=${GITHUB_REF#refs/heads/}
+          echo "Deploying from branch: $BRANCH_NAME"
+          
           ssh polydev "if [ -d ~/${REPO_NAME} ]; then
-                        cd ~/${REPO_NAME} && git pull origin dev;
+                        cd ~/${REPO_NAME} && git fetch origin && git checkout $BRANCH_NAME && git pull origin $BRANCH_NAME;
                       else
-                        git clone --branch dev ${REPO_URL} ~/${REPO_NAME};
+                        git clone --branch $BRANCH_NAME ${REPO_URL} ~/${REPO_NAME};
                       fi"
 
       - name: Run Deployment Script on Dev EC2
