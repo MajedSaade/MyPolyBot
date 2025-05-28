@@ -1,0 +1,49 @@
+name: Deploy Polybot (Dev)
+# majed-dev
+
+on:
+  push:
+    branches:
+      - dev
+  workflow_dispatch:
+
+env:
+  REPO_URL: https://github.com/MajedSaade/MyPolyBot.git
+  REPO_NAME: MyPolyBot
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure SSH for Dev
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY_DEV }}
+          EC2_HOST: ${{ secrets.POLYBOT_EC2_HOST_DEV }}
+          EC2_USERNAME: ${{ secrets.EC2_USERNAME_DEV }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/private_key
+          chmod 600 ~/.ssh/private_key
+          cat > ~/.ssh/config << EOF
+          Host polydev
+            HostName $EC2_HOST
+            User $EC2_USERNAME
+            IdentityFile ~/.ssh/private_key
+            StrictHostKeyChecking no
+          EOF
+
+      - name: Clone or Pull Code on Dev EC2
+        run: |
+          ssh polydev "if [ -d ~/${REPO_NAME} ]; then
+                        cd ~/${REPO_NAME} && git pull;
+                      else
+                        git clone ${REPO_URL} ~/${REPO_NAME};
+                      fi"
+
+      - name: Run Deployment Script on Dev EC2
+        run: |
+          ssh polydev "cd ~/${REPO_NAME} && bash deploy-dev.sh"
