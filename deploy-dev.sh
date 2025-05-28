@@ -17,45 +17,43 @@ if ! command -v python3 &>/dev/null; then
     echo "Installing Python3..."
     sudo apt-get update
     sudo apt-get install -y python3 python3-pip python3-venv
-else
-    echo "Python3 already installed."
 fi
 
-# Ensure python3-venv is available
+# Ensure python3-venv is installed for creating virtual environments
 if ! python3 -m venv --help > /dev/null 2>&1; then
     echo "Installing python3-venv..."
     sudo apt-get install -y python3-venv
 fi
 
-# Create virtual environment if not present
+# Setup virtual environment if it doesn't exist
 if [ ! -d "$VENV_PATH" ]; then
     echo "Creating virtual environment..."
     python3 -m venv $VENV_PATH
 fi
 
-# Activate and install dependencies
+# Activate and install/update all dependencies
 echo "Installing/updating dependencies..."
-$VENV_PATH/bin/pip install --upgrade pip
-$VENV_PATH/bin/pip install -r $APP_DIR/polybot/requirements.txt
-$VENV_PATH/bin/pip install python-dotenv fastapi uvicorn
+$VENV_PATH/bin/python -m pip install --upgrade pip
+$VENV_PATH/bin/python -m pip install -r $APP_DIR/polybot/requirements.txt
+$VENV_PATH/bin/python -m pip install python-dotenv fastapi uvicorn
 
-# Install systemd service
+# Copy the service file
 echo "Installing service file..."
 sudo cp $APP_DIR/$SERVICE_NAME $SERVICE_PATH
 sudo chmod 644 $SERVICE_PATH
 
-# Reload systemd and restart/enable service
+# Reload systemd and restart/enable the bot service
 echo "Configuring systemd service..."
 sudo systemctl daemon-reload
 sudo systemctl enable $SERVICE_NAME
 sudo systemctl restart $SERVICE_NAME
 
-# Check status
+# Check if the service is running
 echo "Checking service status..."
 if ! systemctl is-active --quiet $SERVICE_NAME; then
     echo "❌ $SERVICE_NAME failed to start. Checking logs..."
     sudo systemctl status $SERVICE_NAME --no-pager
-    echo "Full logs: sudo journalctl -u $SERVICE_NAME"
+    echo "Full logs available with: sudo journalctl -u $SERVICE_NAME"
     exit 1
 fi
 
