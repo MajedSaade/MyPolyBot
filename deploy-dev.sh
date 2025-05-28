@@ -16,7 +16,7 @@ sudo mkdir -p $(dirname $SERVICE_PATH)
 if ! command -v python3 &>/dev/null; then
     echo "Installing Python3..."
     sudo apt-get update
-    sudo apt-get install -y python3 python3-pip python3-venv
+    sudo apt-get install -y python3-venv python3.12-venv
 fi
 
 # Ensure virtual environment exists
