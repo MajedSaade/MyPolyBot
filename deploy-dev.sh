@@ -65,32 +65,28 @@ pip install -r "$APP_DIR/polybot/requirements.txt"
 # Set up environment variables
 echo "Setting up environment variables..."
 
-# Create or update .env file with token from environment variable
-if [ -n "$DISCORD_BOT_TOKEN" ]; then
-  echo "Using Discord bot token from environment variable..."
-  echo "DISCORD_BOT_TOKEN=$DISCORD_BOT_TOKEN" > "$APP_DIR/.env"
-  echo "YOLO_URL=http://10.0.1.90:8081/predict" >> "$APP_DIR/.env"
-  echo "OLLAMA_URL=http://10.0.0.136:11434/api/chat" >> "$APP_DIR/.env"
-  echo "OLLAMA_MODEL=gemma3:1b" >> "$APP_DIR/.env"
-  echo "STATUS_SERVER_PORT=8443" >> "$APP_DIR/.env"
-else
-  # Check if .env exists and has DISCORD_BOT_TOKEN
-  if [ ! -f "$APP_DIR/.env" ] || ! grep -q "DISCORD_BOT_TOKEN=" "$APP_DIR/.env" || [ "$(grep "DISCORD_BOT_TOKEN=" "$APP_DIR/.env" | cut -d= -f2)" = "" ]; then
-    echo "Creating .env file with empty token (you'll need to fill this in)..."
-    echo "DISCORD_BOT_TOKEN=" > "$APP_DIR/.env"
-    echo "YOLO_URL=http://10.0.1.90:8081/predict" >> "$APP_DIR/.env"
-    echo "OLLAMA_URL=http://10.0.0.136:11434/api/chat" >> "$APP_DIR/.env"
-    echo "OLLAMA_MODEL=gemma3:1b" >> "$APP_DIR/.env"
-    echo "STATUS_SERVER_PORT=8443" >> "$APP_DIR/.env"
-  
-    echo "⚠️ WARNING: You need to edit the .env file and add your Discord bot token"
-    echo "The bot will not work until you do this and restart the service."
-  fi
+# Always create the .env file from scratch with proper values
+echo "Creating .env configuration file..."
+cat > "$APP_DIR/.env" << EOL
+# Discord Bot Configuration
+DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-your_discord_token_here}
+
+# Services Configuration
+YOLO_URL=http://10.0.1.90:8081/predict
+OLLAMA_URL=http://10.0.0.136:11434/api/chat
+OLLAMA_MODEL=gemma3:1b
+STATUS_SERVER_PORT=8443
+EOL
+
+# Display warning if token not provided
+if [ -z "$DISCORD_BOT_TOKEN" ]; then
+  echo "⚠️ WARNING: No Discord bot token provided. Using placeholder value."
+  echo "The bot will not work until you edit .env with a valid token and restart the service."
 fi
 
 # Display current environment settings
 echo "Current environment variables:"
-echo "DISCORD_BOT_TOKEN: $(if grep -q "DISCORD_BOT_TOKEN=" "$APP_DIR/.env" && [ "$(grep "DISCORD_BOT_TOKEN=" "$APP_DIR/.env" | cut -d= -f2)" != "" ]; then echo "is set"; else echo "not set"; fi)"
+echo "DISCORD_BOT_TOKEN: $(if grep -q "DISCORD_BOT_TOKEN=" "$APP_DIR/.env" && [ "$(grep "DISCORD_BOT_TOKEN=" "$APP_DIR/.env" | cut -d= -f2)" != "your_discord_token_here" ]; then echo "is set"; else echo "not set"; fi)"
 echo "YOLO_URL: $(grep "YOLO_URL=" "$APP_DIR/.env" | cut -d= -f2)"
 echo "OLLAMA_URL: $(grep "OLLAMA_URL=" "$APP_DIR/.env" | cut -d= -f2)"
 
