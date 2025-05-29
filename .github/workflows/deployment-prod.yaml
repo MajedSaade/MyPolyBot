@@ -44,5 +44,7 @@ jobs:
                    fi"
 
       - name: Run Deployment Script on EC2
+        env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN_PROD }}
         run: |
-          ssh poly "cd ~/${REPO_NAME} && bash deploy.sh"
+          ssh poly "cd ~/${REPO_NAME} && DISCORD_BOT_TOKEN='$DISCORD_BOT_TOKEN' bash deploy.sh"

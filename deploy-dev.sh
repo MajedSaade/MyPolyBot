@@ -1,18 +1,15 @@
 #!/bin/bash
 
-set -e  # Exit on any error
+# Exit on any error
+set -e
 
-echo "Starting deployment of PolyBot..."
+echo "Starting deployment of PolyBot (Dev)..."
 
 # Configuration
-SERVICE_NAME=polybot.service
+SERVICE_NAME=polybot-dev.service
 SERVICE_PATH=/etc/systemd/system/$SERVICE_NAME
 APP_DIR=$(pwd)  # Current directory
-VENV_PATH="$APP_DIR/venv"  # Use venv for consistency
-
-# Create directories if they don't exist
-echo "Creating necessary directories..."
-sudo mkdir -p $(dirname $SERVICE_PATH)
+VENV_PATH="$APP_DIR/venv"  # Use venv instead of .venv for consistency with the working example
 
 # Install system dependencies
 echo "Installing system dependencies..."
@@ -68,6 +65,17 @@ pip install -r "$APP_DIR/polybot/requirements.txt"
 # Set up environment variables
 echo "Setting up environment variables..."
 
+# Parse YOLO URL for diagnostics
+YOLO_HOST=$(echo "http://10.0.1.90:8081/predict" | sed -e 's|^[^/]*//||' -e 's|/.*$||' -e 's|:.*||')
+YOLO_PORT=$(echo "http://10.0.1.90:8081/predict" | sed -e 's|^[^/]*//||' -e 's|/.*$||' -e 's|.*:||')
+if [ -z "$YOLO_PORT" ]; then
+  if [[ "http://10.0.1.90:8081/predict" == https* ]]; then
+    YOLO_PORT=443
+  else
+    YOLO_PORT=80
+  fi
+fi
+
 # Always create the .env file from scratch with proper values
 echo "Creating .env configuration file..."
 cat > "$APP_DIR/.env" << EOL
@@ -100,7 +108,7 @@ chmod 600 "$APP_DIR/.env"
 echo "Preparing service file..."
 cat > /tmp/$SERVICE_NAME << EOL
 [Unit]
-Description=Discord Polybot Service
+Description=Discord Polybot Service (Dev)
 After=network.target
 Wants=network-online.target
 StartLimitIntervalSec=0
@@ -155,7 +163,24 @@ if ! systemctl is-active --quiet $SERVICE_NAME; then
   
   exit 1
 else
-  echo "✅ PolyBot service is running successfully."
+  echo "✅ PolyBot (Dev) service is running successfully."
 fi
+
+# Run network diagnostics for YOLO service
+echo "Running network diagnostics for YOLO service..."
+echo "YOLO Host: $YOLO_HOST"
+echo "YOLO Port: $YOLO_PORT"
+
+# Check if YOLO host is reachable
+echo "Checking if YOLO host is reachable..."
+ping -c 3 $YOLO_HOST || echo "⚠️ WARNING: Could not ping YOLO host. This may be due to firewall rules or the host being down."
+
+# Check if YOLO port is open
+echo "Checking if YOLO port is open..."
+timeout 5 nc -zv $YOLO_HOST $YOLO_PORT 2>&1 || echo "⚠️ WARNING: Could not connect to YOLO service port. The service may be down or not accepting connections."
+
+# Try to make a request to the YOLO service
+echo "Testing connection to YOLO service API..."
+curl -m 5 -s -o /dev/null -w "HTTP Status: %{http_code}\n" "http://${YOLO_HOST}:${YOLO_PORT}/predict" || echo "⚠️ WARNING: Could not make a request to YOLO service. The service may be down or not properly configured."
 
 echo "Deployment completed successfully!"
