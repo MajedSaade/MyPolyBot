@@ -80,13 +80,19 @@ fi
 echo "Creating .env configuration file..."
 cat > "$APP_DIR/.env" << EOL
 # Discord Bot Configuration
-DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-your_discord_token_here}
+DISCORD_DEV_BOT_TOKEN=${DISCORD_BOT_TOKEN:-your_discord_token_here}
 
 # Services Configuration
 YOLO_URL=http://10.0.1.90:8081/predict
 OLLAMA_URL=http://10.0.0.136:11434/api/chat
 OLLAMA_MODEL=gemma3:1b
 STATUS_SERVER_PORT=8443
+
+# AWS S3 Configuration for Image Upload
+AWS_ACCESS_KEY_ID=your_aws_access_key_here
+AWS_SECRET_ACCESS_KEY=your_aws_secret_key_here
+AWS_REGION=us-east-1
+AWS_S3_BUCKET=your-s3-bucket-name
 EOL
 
 # Display warning if token not provided
@@ -97,7 +103,7 @@ fi
 
 # Display current environment settings
 echo "Current environment variables:"
-echo "DISCORD_BOT_TOKEN: $(if grep -q "DISCORD_BOT_TOKEN=" "$APP_DIR/.env" && [ "$(grep "DISCORD_BOT_TOKEN=" "$APP_DIR/.env" | cut -d= -f2)" != "your_discord_token_here" ]; then echo "is set"; else echo "not set"; fi)"
+echo "DISCORD_DEV_BOT_TOKEN: $(if grep -q "DISCORD_DEV_BOT_TOKEN=" "$APP_DIR/.env" && [ "$(grep "DISCORD_DEV_BOT_TOKEN=" "$APP_DIR/.env" | cut -d= -f2)" != "your_discord_token_here" ]; then echo "is set"; else echo "not set"; fi)"
 echo "YOLO_URL: $(grep "YOLO_URL=" "$APP_DIR/.env" | cut -d= -f2)"
 echo "OLLAMA_URL: $(grep "OLLAMA_URL=" "$APP_DIR/.env" | cut -d= -f2)"
 
