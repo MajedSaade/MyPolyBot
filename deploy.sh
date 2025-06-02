@@ -79,6 +79,12 @@ YOLO_URL=http://10.0.1.90:8081/predict
 OLLAMA_URL=http://10.0.0.136:11434/api/chat
 OLLAMA_MODEL=gemma3:1b
 STATUS_SERVER_PORT=8443
+
+# AWS S3 Configuration for Image Uploads
+AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+AWS_REGION=${AWS_REGION:-us-east-1}
+AWS_DEV_S3_BUCKET=${AWS_DEV_S3_BUCKET:-}
 EOL
 
 # Display warning if token not provided

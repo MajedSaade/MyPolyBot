@@ -32,22 +32,31 @@ class Img:
         new_path = self.path.with_name(self.path.stem + '_filtered' + self.path.suffix)
         imsave(new_path, np.array(self.data) / 255.0, cmap='gray')  # Normalize for saving
 
-        # Upload to S3
-        s3 = boto3.client(
-            's3',
-            aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
-            aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'),
-            region_name=os.getenv('AWS_REGION')
-        )
-
+        # Check if we have AWS credentials before attempting to upload
+        aws_access_key = os.getenv('AWS_ACCESS_KEY_ID')
+        aws_secret_key = os.getenv('AWS_SECRET_ACCESS_KEY')
+        aws_region = os.getenv('AWS_REGION')
         bucket_name = os.getenv('AWS_DEV_S3_BUCKET')
-        object_name = new_path.name  # Use just the file name for S3 key
 
-        try:
-            s3.upload_file(str(new_path), bucket_name, object_name)
-            print(f"Uploaded {object_name} to S3 bucket {bucket_name}")
-        except Exception as e:
-            print(f"Error uploading to S3: {e}")
+        # Only attempt to upload if we have all required AWS credentials
+        if aws_access_key and aws_secret_key and aws_region and bucket_name:
+            try:
+                # Initialize S3 client
+                s3 = boto3.client(
+                    's3',
+                    aws_access_key_id=aws_access_key,
+                    aws_secret_access_key=aws_secret_key,
+                    region_name=aws_region
+                )
+
+                # Upload the file
+                object_name = new_path.name  # Use just the file name for S3 key
+                s3.upload_file(str(new_path), bucket_name, object_name)
+                print(f"Uploaded {object_name} to S3 bucket {bucket_name}")
+            except Exception as e:
+                print(f"Error uploading to S3: {e}")
+        else:
+            print("Skipping S3 upload - AWS credentials not configured")
 
         return new_path
 
