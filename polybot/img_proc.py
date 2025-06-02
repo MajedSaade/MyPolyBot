@@ -34,6 +34,9 @@ class Img:
         imsave(new_path, np.array(self.data) / 255.0, cmap='gray')  # Normalize for saving
         
         logger.info(f"Image saved locally at: {new_path}")
+        logger.info(f"Absolute path: {os.path.abspath(new_path)}")
+        logger.info(f"File exists: {os.path.exists(new_path)}")
+        logger.info(f"File size: {os.path.getsize(new_path)} bytes")
 
         # Check if we have AWS credentials before attempting to upload
         aws_access_key = os.getenv('AWS_ACCESS_KEY_ID')
@@ -47,6 +50,11 @@ class Img:
         logger.info(f"AWS Secret Access Key: {'Set' if aws_secret_key else 'Not set'}")
         logger.info(f"AWS Region: {aws_region if aws_region else 'Not set'}")
         logger.info(f"S3 Bucket: {bucket_name if bucket_name else 'Not set'}")
+        
+        # Try both bucket names if AWS_DEV_S3_BUCKET is not set
+        if not bucket_name:
+            bucket_name = os.getenv('AWS_S3_BUCKET')
+            logger.info(f"Trying alternate bucket name: {bucket_name if bucket_name else 'Not set'}")
 
         # Only attempt to upload if we have all required AWS credentials
         if aws_access_key and aws_secret_key and aws_region and bucket_name:
