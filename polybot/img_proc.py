@@ -32,6 +32,8 @@ class Img:
     def save_img(self):
         new_path = self.path.with_name(self.path.stem + '_filtered' + self.path.suffix)
         imsave(new_path, np.array(self.data) / 255.0, cmap='gray')  # Normalize for saving
+        
+        logger.info(f"Image saved locally at: {new_path}")
 
         # Check if we have AWS credentials before attempting to upload
         aws_access_key = os.getenv('AWS_ACCESS_KEY_ID')
@@ -60,11 +62,30 @@ class Img:
 
                 # Upload the file
                 object_name = new_path.name  # Use just the file name for S3 key
-                logger.info(f"Uploading {object_name} to S3 bucket {bucket_name}")
+                logger.info(f"Starting upload of {object_name} ({os.path.getsize(new_path)} bytes) to S3 bucket {bucket_name}")
+                
+                # Check if file exists in S3 before uploading
+                try:
+                    s3.head_object(Bucket=bucket_name, Key=object_name)
+                    logger.warning(f"File {object_name} already exists in S3 bucket {bucket_name}")
+                except Exception:
+                    logger.info(f"File {object_name} does not exist in bucket yet, proceeding with upload")
+                
+                # Perform the upload
                 s3.upload_file(str(new_path), bucket_name, object_name)
                 logger.success(f"Successfully uploaded {object_name} to S3 bucket {bucket_name}")
+                
+                # Verify upload by checking if the file exists in S3
+                try:
+                    response = s3.head_object(Bucket=bucket_name, Key=object_name)
+                    logger.info(f"Verified file exists in S3: {object_name}, Size: {response['ContentLength']} bytes")
+                except Exception as e:
+                    logger.error(f"Failed to verify file in S3 after upload: {e}")
+                
             except Exception as e:
-                logger.error(f"Error uploading to S3: {e}")
+                logger.error(f"Error uploading to S3: {str(e)}")
+                import traceback
+                logger.error(f"Traceback: {traceback.format_exc()}")
         else:
             logger.warning("Skipping S3 upload - AWS credentials not completely configured")
             missing = []
