@@ -8,7 +8,7 @@ import random
 import re
 import requests
 from pathlib import Path
-from img_proc import Img
+from polybot.img_proc import Img
 import json
 import asyncio
 
@@ -283,7 +283,7 @@ class Bot:
                 "• `!segment` - Convert image to black & white\n"
                 "• `!detect` - Detect objects in an image using YOLO\n"
                 "• `!concat [horizontal|vertical]` - Join two images\n"
-                "• `!spotify [track|artist|album|playlist] search_query` - Search for music on Spotify\n"
+                "• `!spotify [search query]` - Search for music on Spotify\n"
                 "• `!songrec` - Get personalized song recommendations\n"
                 "• `!ask [question]` - Ask the AI a question using Ollama\n\n"
                 "For commands except `!concat`, `!spotify`, `!songrec` and `!ask`, attach an image to your message.\n"
@@ -399,12 +399,16 @@ class ImageProcessingBot(Bot):
             await self.song_recommendation_flow(ctx)
 
         @self.client.command(name='spotify')
-        async def spotify(ctx, search_type: str = 'track', *, search_query: str):
+        async def spotify(ctx, *, search_query: str = None):
             """
             Search for content on Spotify and get a link to open it in the Spotify app
-            Usage: !spotify [track|artist|album|playlist] search_query
+            Usage: !spotify [search query]
             """
-            await self.spotify_search(ctx, search_type, search_query)
+            if not search_query:
+                await ctx.send("Please provide a search query. Usage: `!spotify [song/artist/album name]`")
+                return
+                
+            await self.spotify_search(ctx, search_query)
 
         @self.client.command(name='concat')
         async def concat(ctx, direction: str = 'horizontal'):
@@ -789,41 +793,41 @@ Description: This upbeat track perfectly captures the happy mood with its catchy
         try:
             # First, try to extract song information using regex patterns
             import re
-
+            
             # Clean up the response - remove any markdown formatting that might interfere
             cleaned_response = ai_response.replace("*", "").replace(",\n", "\n").replace(".,", ".")
-
+            
             # Initialize the formatted output
-            formatted_output = ""
-
+            formatted_output = "# 🎵 Your Personalized Song Recommendations 🎵\n\n"
+            
             # Find all songs in the response
             songs = re.findall(
                 r'(?:Song Title:|^\d+\.\s+)([^,\n]+).*?Artist Name:([^,\n]+).*?Year of Release:([^,\n]+).*?YouTube Link:.*?\[(.*?)\]\((.*?)\).*?Description:([^,\n]+)',
                 cleaned_response, re.DOTALL | re.MULTILINE)
-
+            
             # If no songs found with the pattern, try an alternative pattern
             if not songs:
                 songs = re.findall(
                     r'(?:Song Title:|^\d+\.\s+)([^,\n]+).*?Artist Name:([^,\n]+).*?Year of Release:([^,\n]+).*?YouTube Link:(?:\s+)?(https?://[^\s]+).*?Description:([^,\n]+)',
                     cleaned_response, re.DOTALL | re.MULTILINE)
-
+            
             # If still no songs found, try another pattern that might match the format
             if not songs:
                 songs = re.findall(
                     r'(?:Song Title:|^\d+\.\s+)(.*?)(?:Artist Name:|👤\s+Artist:)(.*?)(?:Year of Release:|📅\s+Year:)(.*?)(?:YouTube Link:|🎵\s+Link:)(.*?)(?:Description:|💬)(.*?)(?:\n\n|$)',
                     cleaned_response, re.DOTALL | re.MULTILINE)
-
+            
             # If still no songs found, return the original response
             if not songs:
                 return ai_response
-
+            
             # Format each song
             for i, song in enumerate(songs, 1):
                 if len(song) >= 5:  # Make sure we have all the needed parts
                     title = song[0].strip()
                     artist = song[1].strip()
                     year = song[2].strip()
-
+                    
                     # Handle different link formats
                     if len(song) == 6:  # First pattern with markdown link
                         link_text = song[3].strip()
@@ -833,76 +837,62 @@ Description: This upbeat track perfectly captures the happy mood with its catchy
                         link_url = song[3].strip()
                         description = song[4].strip()
 
-                    # Format the song information
-                    formatted_output += f"**{i}. {title}** by {artist} ({year})\n"
-                    formatted_output += f"🎬 [Watch on YouTube]({link_url})\n"
-
-                    # Add Spotify link
-                    spotify_search = f"{title} {artist}".replace(' ', '%20')
-                    spotify_app_link = f"spotify:search:{spotify_search}"
-                    spotify_web_link = f"https://open.spotify.com/search/{spotify_search}/tracks"
+                    # Clean up URL - remove trailing punctuation
+                    link_url = link_url.rstrip('.,;:!?')
                     
-                    formatted_output += f"💬 {description}\n\n"
+                    # Ensure the URL is properly formatted
+                    if not link_url.startswith(('http://', 'https://')):
+                        link_url = f"https://{link_url}"
 
+                    # Add a decorative border for each song
+                    formatted_output += f"```\n╔══════════════════ SONG {i} ══════════════════╗\n```\n\n"
+                    
+                    # Song title and artist with emojis
+                    formatted_output += f"## 🎵 **{title}** ({year})\n"
+                    formatted_output += f"### 👤 **Artist:** {artist}\n\n"
+                    
+                    # Links section with clearer formatting
+                    formatted_output += "**Listen Now:**\n"
+                    # YouTube link with emoji
+                    formatted_output += f"🎬 [Listen on YouTube]({link_url})\n"
+                    
+                    # Spotify link
+                    spotify_search = f"{title} {artist}".replace(' ', '%20')
+                    spotify_uri = f"spotify:search:{spotify_search}"
+                    formatted_output += f"🎧 [Open in Spotify]({spotify_uri})\n\n"
+                    
+                    # Description with a nice heading
+                    formatted_output += f"**💫 Why You'll Like It:**\n{description}\n\n"
+                    
+                    # Add a closing border
+                    formatted_output += f"```\n╚═══════════════════════════════════════════╝\n```\n\n"
+            
+            # Add a footer note with instructions
+            formatted_output += "*Click any of the links above to listen to these songs! The Spotify links will open directly in your Spotify app.*"
             return formatted_output
-
+            
         except Exception as e:
             logger.error(f"Error formatting song recommendations: {e}")
             # Return the original response if there was an error in formatting
             return ai_response
 
-    async def spotify_search(self, ctx, search_type, search_query):
+    async def spotify_search(self, ctx, search_query):
         """Search for content on Spotify and provide a link that opens in the Spotify app"""
-        # Validate search type
-        valid_types = ['track', 'artist', 'album', 'playlist']
-        if search_type not in valid_types:
-            search_type = 'track'  # Default to track if invalid type without showing error message
-
         # Let the user know we're searching
-        await ctx.send(f"🔍 Searching Spotify for {search_type}: **{search_query}**")
+        await ctx.send(f"🔍 Searching Spotify for: **{search_query}**")
 
         try:
             # Format the search query for a URL
             formatted_query = search_query.replace(' ', '%20')
-
-            # Create Spotify links based on search type - using web links that will redirect to app
-            if search_type == 'track':
-                # For tracks, use the web links that will redirect to the app when clicked
-                spotify_web_link = f"https://open.spotify.com/search/{formatted_query}"
-                specific_track_link = f"https://open.spotify.com/search/track:{formatted_query}"
-            elif search_type == 'artist':
-                spotify_web_link = f"https://open.spotify.com/search/artist:{formatted_query}"
-            elif search_type == 'album':
-                spotify_web_link = f"https://open.spotify.com/search/album:{formatted_query}"
-            elif search_type == 'playlist':
-                spotify_web_link = f"https://open.spotify.com/search/playlist:{formatted_query}"
-
+            
+            # Create Spotify URI (direct app link)
+            spotify_uri = f"spotify:search:{formatted_query}"
+            
             # Create a message with the links
             message = (
-                f"**🎵 Spotify Search Results for {search_type}: {search_query}**\n\n"
-                f"**Open in Spotify:** [Click here]({spotify_web_link})\n"
-            )
-
-            # Add specific track link if searching for a track
-            if search_type == 'track':
-                message += (
-                    f"**Direct track search:** [Open track]({specific_track_link})\n\n"
-                )
-
-            # Add instructions for copying the Spotify URI manually
-            if search_type == 'track':
-                spotify_uri = f"spotify:search:track:{formatted_query}"
-            elif search_type == 'artist':
-                spotify_uri = f"spotify:search:artist:{formatted_query}"
-            elif search_type == 'album':
-                spotify_uri = f"spotify:search:album:{formatted_query}"
-            elif search_type == 'playlist':
-                spotify_uri = f"spotify:search:playlist:{formatted_query}"
-
-            message += (
-                f"**Copy this Spotify URI to open directly in the app:**\n"
-                f"`{spotify_uri}`\n\n"
-                f"*Note: The web links will open in your browser first, then redirect to the Spotify app if installed.*"
+                f"**🎵 Spotify Search Results for: {search_query}**\n\n"
+                f"**Open in Spotify:** [Click here]({spotify_uri})\n\n"
+                f"*Clicking the link above will open directly in your Spotify app*"
             )
 
             await ctx.send(message)

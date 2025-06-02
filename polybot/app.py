@@ -2,12 +2,10 @@ import os
 import asyncio
 import threading
 from dotenv import load_dotenv
-from bot import ImageProcessingBot
+from polybot.bot import ImageProcessingBot
 from loguru import logger
 from fastapi import FastAPI
 import uvicorn
-
-#fixesspaces
 
 # Load environment variables from .env file
 load_dotenv()

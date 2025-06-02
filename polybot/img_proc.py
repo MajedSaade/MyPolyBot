@@ -3,15 +3,11 @@ import matplotlib
 from matplotlib.image import imread, imsave
 import numpy as np
 import random
-import boto3
-import os
-
 
 def rgb2gray(rgb):
     r, g, b = rgb[:, :, 0], rgb[:, :, 1], rgb[:, :, 2]
     gray = 0.2989 * r + 0.5870 * g + 0.1140 * b
     return gray
-
 
 class Img:
 
@@ -31,24 +27,6 @@ class Img:
     def save_img(self):
         new_path = self.path.with_name(self.path.stem + '_filtered' + self.path.suffix)
         imsave(new_path, np.array(self.data) / 255.0, cmap='gray')  # Normalize for saving
-
-        # Upload to S3
-        s3 = boto3.client(
-            's3',
-            aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
-            aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'),
-            region_name=os.getenv('AWS_REGION')
-        )
-
-        bucket_name = os.getenv('AWS_S3_BUCKET')
-        object_name = new_path.name  # Use just the file name for S3 key
-
-        try:
-            s3.upload_file(str(new_path), bucket_name, object_name)
-            print(f"Uploaded {object_name} to S3 bucket {bucket_name}")
-        except Exception as e:
-            print(f"Error uploading to S3: {e}")
-
         return new_path
 
     def blur(self, blur_level=16):
