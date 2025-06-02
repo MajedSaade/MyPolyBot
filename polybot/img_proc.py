@@ -1,28 +1,11 @@
-import os
-import traceback
 from pathlib import Path
 import matplotlib
 from matplotlib.image import imread, imsave
 import numpy as np
 import random
 import boto3
+import os
 from loguru import logger
-import time
-import dotenv
-
-# Load environment variables from .env file
-env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
-dotenv.load_dotenv(dotenv_path=env_path)
-
-# Explicitly set environment variables from loaded .env file for S3 access
-if os.path.exists(env_path):
-    with open(env_path, 'r') as f:
-        for line in f:
-            if line.strip() and not line.startswith('#'):
-                key, value = line.strip().split('=', 1)
-                os.environ[key] = value
-                if key.startswith('AWS_'):
-                    logger.info(f"Set environment variable: {key}")
 
 
 def rgb2gray(rgb):
@@ -46,50 +29,35 @@ class Img:
 
         self.data = gray.tolist()
 
-    def save_img(self, chat_id=None):
-        """
-        Save the processed image locally and to S3 bucket
-        
-        Args:
-            chat_id: Optional chat ID to organize images by user in S3
-            
-        Returns:
-            Path to the saved image
-        """
-        # Create a new filename with _filtered suffix
+    def save_img(self):
         new_path = self.path.with_name(self.path.stem + '_filtered' + self.path.suffix)
-        
-        # Save the image locally first
         imsave(new_path, np.array(self.data) / 255.0, cmap='gray')  # Normalize for saving
 
         logger.info(f"Image saved locally at: {new_path}")
         logger.info(f"Absolute path: {os.path.abspath(new_path)}")
         logger.info(f"File exists: {os.path.exists(new_path)}")
         logger.info(f"File size: {os.path.getsize(new_path)} bytes")
-            
+
         # Check if we have AWS credentials before attempting to upload
-        aws_access_key = os.environ.get('AWS_ACCESS_KEY_ID')
-        aws_secret_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
-        aws_region = os.environ.get('AWS_REGION')
-        
-        # Explicitly prioritize the dev bucket
-        bucket_name = os.environ.get('AWS_DEV_S3_BUCKET')
-        
+        aws_access_key = os.getenv('AWS_ACCESS_KEY_ID')
+        aws_secret_key = os.getenv('AWS_SECRET_ACCESS_KEY')
+        aws_region = os.getenv('AWS_REGION')
+        bucket_name = os.getenv('AWS_DEV_S3_BUCKET')
+
         # Log S3 upload attempt details (without exposing sensitive data)
         logger.info(f"Checking S3 upload requirements...")
         logger.info(f"AWS Access Key ID: {'Set' if aws_access_key else 'Not set'}")
         logger.info(f"AWS Secret Access Key: {'Set' if aws_secret_key else 'Not set'}")
         logger.info(f"AWS Region: {aws_region if aws_region else 'Not set'}")
-        logger.info(f"Target S3 Bucket (DEV): {bucket_name if bucket_name else 'Not set'}")
+        logger.info(f"S3 Bucket: {bucket_name if bucket_name else 'Not set'}")
 
         # Try both bucket names if AWS_DEV_S3_BUCKET is not set
         if not bucket_name:
-            bucket_name = os.environ.get('AWS_S3_BUCKET')
-            logger.info(f"DEV bucket not set, trying production bucket: {bucket_name if bucket_name else 'Not set'}")
+            bucket_name = os.getenv('AWS_S3_BUCKET')
+            logger.info(f"Trying alternate bucket name: {bucket_name if bucket_name else 'Not set'}")
 
         # Only attempt to upload if we have all required AWS credentials
         if aws_access_key and aws_secret_key and aws_region and bucket_name:
-            upload_success = False
             try:
                 # Initialize S3 client
                 logger.info(f"Initializing S3 client for region: {aws_region}")
@@ -100,98 +68,40 @@ class Img:
                     region_name=aws_region
                 )
 
-                # Structure folders in S3 by chat_id if provided
-                if chat_id:
-                    # Structure: <bucket_name>/<chat_id>/predicted/<image_name>
-                    object_key = f"{chat_id}/predicted/{new_path.name}"
-                    # Also upload original image
-                    original_key = f"{chat_id}/original/{self.path.name}"
-                    try:
-                        # Upload original image if it exists and is readable
-                        if os.path.exists(self.path) and os.access(self.path, os.R_OK):
-                            logger.info(f"Uploading original image to S3: {original_key}")
-                            s3.upload_file(str(self.path), bucket_name, original_key)
-                            logger.info(f"Original image uploaded to S3: {original_key}")
-                    except Exception as e:
-                        logger.error(f"Error uploading original image to S3: {str(e)}")
-                else:
-                    # If no chat_id, use simpler structure
-                    object_key = new_path.name
+                # Upload the file
+                object_name = new_path.name  # Use just the file name for S3 key
+                logger.info(
+                    f"Starting upload of {object_name} ({os.path.getsize(new_path)} bytes) to S3 bucket {bucket_name}")
 
-                logger.info(f"Starting upload of {object_key} ({os.path.getsize(new_path)} bytes) to S3 bucket {bucket_name}")
-
-                # Try multiple upload methods for reliability
+                # Check if file exists in S3 before uploading
                 try:
-                    # Method 1: Use upload_file
-                    logger.info(f"Attempting upload with boto3.client.upload_file")
-                    s3.upload_file(str(new_path), bucket_name, object_key)
-                    upload_success = True
-                except Exception as e1:
-                    logger.warning(f"First upload method failed: {str(e1)}")
-                    try:
-                        # Method 2: Use put_object with file content
-                        logger.info(f"Attempting upload with boto3.client.put_object")
-                        with open(str(new_path), 'rb') as data:
-                            s3.put_object(Bucket=bucket_name, Key=object_key, Body=data.read())
-                        upload_success = True
-                    except Exception as e2:
-                        logger.error(f"Second upload method also failed: {str(e2)}")
-                        # Try method 3: AWS CLI
-                        try:
-                            logger.info(f"Attempting upload with AWS CLI")
-                            import subprocess
-                            result = subprocess.run(
-                                ['aws', 's3', 'cp', str(new_path), f"s3://{bucket_name}/{object_key}"],
-                                capture_output=True, text=True)
-                            if result.returncode == 0:
-                                logger.info(f"AWS CLI upload successful")
-                                upload_success = True
-                            else:
-                                logger.error(f"AWS CLI upload failed: {result.stderr}")
-                                raise Exception(f"AWS CLI upload failed: {result.stderr}")
-                        except Exception as e3:
-                            logger.error(f"All upload methods failed: {str(e3)}")
-                            raise e3
+                    s3.head_object(Bucket=bucket_name, Key=object_name)
+                    logger.warning(f"File {object_name} already exists in S3 bucket {bucket_name}")
+                except Exception:
+                    logger.info(f"File {object_name} does not exist in bucket yet, proceeding with upload")
 
-                if upload_success:
-                    logger.info(f"Successfully uploaded {object_key} to S3 bucket {bucket_name}")
-                    
-                    # Try to generate a presigned URL for the uploaded image (helpful for debugging)
-                    try:
-                        url = s3.generate_presigned_url(
-                            'get_object',
-                            Params={'Bucket': bucket_name, 'Key': object_key},
-                            ExpiresIn=3600  # URL valid for 1 hour
-                        )
-                        logger.info(f"Presigned URL for uploaded image: {url}")
-                    except Exception as e:
-                        logger.warning(f"Could not generate presigned URL: {str(e)}")
-                        
-                    # Verify upload
-                    try:
-                        response = s3.head_object(Bucket=bucket_name, Key=object_key)
-                        logger.info(f"Verified file exists in S3: {object_key}, Size: {response['ContentLength']} bytes")
-                    except Exception as e:
-                        logger.error(f"Failed to verify file in S3 after upload: {e}")
-                else:
-                    logger.error(f"Failed to upload {object_key} to S3 bucket {bucket_name}")
+                # Perform the upload
+                s3.upload_file(str(new_path), bucket_name, object_name)
+                logger.success(f"Successfully uploaded {object_name} to S3 bucket {bucket_name}")
+
+                # Verify upload by checking if the file exists in S3
+                try:
+                    response = s3.head_object(Bucket=bucket_name, Key=object_name)
+                    logger.info(f"Verified file exists in S3: {object_name}, Size: {response['ContentLength']} bytes")
+                except Exception as e:
+                    logger.error(f"Failed to verify file in S3 after upload: {e}")
 
             except Exception as e:
                 logger.error(f"Error uploading to S3: {str(e)}")
-                logger.error(f"Error type: {type(e).__name__}")
+                import traceback
                 logger.error(f"Traceback: {traceback.format_exc()}")
-                # Try to provide more detailed boto3 error info if available
-                if hasattr(e, 'response') and 'Error' in getattr(e, 'response', {}):
-                    error_info = e.response['Error']
-                    logger.error(f"AWS Error Code: {error_info.get('Code')}")
-                    logger.error(f"AWS Error Message: {error_info.get('Message')}")
         else:
             logger.warning("Skipping S3 upload - AWS credentials not completely configured")
             missing = []
             if not aws_access_key: missing.append("AWS_ACCESS_KEY_ID")
             if not aws_secret_key: missing.append("AWS_SECRET_ACCESS_KEY")
             if not aws_region: missing.append("AWS_REGION")
-            if not bucket_name: missing.append("AWS_DEV_S3_BUCKET or AWS_S3_BUCKET")
+            if not bucket_name: missing.append("AWS_DEV_S3_BUCKET")
             logger.warning(f"Missing AWS environment variables: {', '.join(missing)}")
 
         return new_path
@@ -297,81 +207,3 @@ class Img:
         for i in range(height):
             for j in range(width):
                 self.data[i][j] = 255.0 if self.data[i][j] > threshold else 0.0
-
-
-def test_s3_connectivity():
-    """Test S3 connectivity by uploading a small test file"""
-    try:
-        # Make sure environment variables are loaded
-        env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
-        if os.path.exists(env_path):
-            dotenv.load_dotenv(dotenv_path=env_path)
-            logger.info(f"Loaded environment variables from {env_path}")
-        
-        logger.info("Testing S3 connectivity with a small file upload...")
-        
-        # Get AWS credentials
-        aws_access_key = os.environ.get('AWS_ACCESS_KEY_ID')
-        aws_secret_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
-        aws_region = os.environ.get('AWS_REGION')
-        bucket_name = os.environ.get('AWS_DEV_S3_BUCKET')
-        
-        # Log the found values (without revealing secrets)
-        logger.info(f"AWS Access Key ID: {'Set' if aws_access_key else 'Not set'}")
-        logger.info(f"AWS Secret Access Key: {'Set' if aws_secret_key else 'Not set'}")
-        logger.info(f"AWS Region: {aws_region if aws_region else 'Not set'}")
-        logger.info(f"Target S3 Bucket (DEV): {bucket_name if bucket_name else 'Not set'}")
-        
-        if not bucket_name:
-            bucket_name = os.environ.get('AWS_S3_BUCKET')
-            logger.info(f"DEV bucket not set, trying production bucket: {bucket_name if bucket_name else 'Not set'}")
-            
-        if not all([aws_access_key, aws_secret_key, aws_region, bucket_name]):
-            logger.error("Missing AWS credentials for test upload")
-            logger.error(f"Environment variables path checked: {env_path}")
-            missing = []
-            if not aws_access_key: missing.append("AWS_ACCESS_KEY_ID")
-            if not aws_secret_key: missing.append("AWS_SECRET_ACCESS_KEY")
-            if not aws_region: missing.append("AWS_REGION")
-            if not bucket_name: missing.append("AWS_DEV_S3_BUCKET or AWS_S3_BUCKET")
-            logger.error(f"Missing environment variables: {', '.join(missing)}")
-            return False
-            
-        # Create a test file
-        test_file = f"s3_test_{int(time.time())}.txt"
-        with open(test_file, 'w') as f:
-            f.write(f"S3 test upload at {time.ctime()}")
-            
-        logger.info(f"Created test file: {test_file} (size: {os.path.getsize(test_file)} bytes)")
-            
-        # Create S3 client
-        s3 = boto3.client(
-            's3',
-            aws_access_key_id=aws_access_key,
-            aws_secret_access_key=aws_secret_key,
-            region_name=aws_region
-        )
-        
-        # Upload the test file
-        logger.info(f"Uploading test file to bucket: {bucket_name}")
-        s3.upload_file(test_file, bucket_name, f"tests/{test_file}")
-        logger.info(f"Test file {test_file} uploaded successfully to {bucket_name}")
-        
-        # Verify upload
-        response = s3.head_object(Bucket=bucket_name, Key=f"tests/{test_file}")
-        logger.info(f"Verified test file exists in S3, size: {response['ContentLength']} bytes")
-        
-        # Clean up
-        os.remove(test_file)
-        logger.info("S3 connection test successful")
-        return True
-    except Exception as e:
-        logger.error(f"S3 connection test failed: {str(e)}")
-        logger.error(f"Error type: {type(e).__name__}")
-        logger.error(traceback.format_exc())
-        return False
-
-
-# If running this file directly, run the S3 test
-if __name__ == "__main__":
-    test_s3_connectivity()
