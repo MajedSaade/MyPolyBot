@@ -59,7 +59,7 @@ pip install --upgrade pip
 
 # Install the specific required packages first to ensure they're available
 echo "Installing critical packages..."
-pip install python-dotenv fastapi uvicorn loguru discord.py
+pip install python-dotenv fastapi uvicorn loguru discord.py boto3
 
 # Then install all requirements
 echo "Installing all requirements..."
@@ -73,6 +73,7 @@ echo "Creating .env configuration file..."
 cat > "$APP_DIR/.env" << EOL
 # Discord Bot Configuration
 DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-your_discord_token_here}
+DISCORD_DEV_BOT_TOKEN=${DISCORD_DEV_BOT_TOKEN:-your_discord_token_here}
 
 # Services Configuration
 YOLO_URL=http://10.0.1.90:8081/predict
@@ -88,14 +89,23 @@ AWS_DEV_S3_BUCKET=${AWS_DEV_S3_BUCKET:-}
 EOL
 
 # Display warning if token not provided
-if [ -z "$DISCORD_BOT_TOKEN" ]; then
-  echo "⚠️ WARNING: No Discord bot token provided. Using placeholder value."
+if [ -z "$DISCORD_DEV_BOT_TOKEN" ]; then
+  echo "⚠️ WARNING: No Discord dev bot token provided. Using placeholder value."
   echo "The bot will not work until you edit .env with a valid token and restart the service."
+fi
+
+# Display warning if AWS credentials not provided
+if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ] || [ -z "$AWS_DEV_S3_BUCKET" ]; then
+  echo "⚠️ WARNING: AWS credentials or S3 bucket not fully configured."
+  echo "S3 file uploads will be disabled until you configure AWS credentials."
+  echo "Run this command with AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AWS_DEV_S3_BUCKET environment variables set."
 fi
 
 # Display current environment settings
 echo "Current environment variables:"
-echo "DISCORD_BOT_TOKEN: $(if grep -q "DISCORD_BOT_TOKEN=" "$APP_DIR/.env" && [ "$(grep "DISCORD_BOT_TOKEN=" "$APP_DIR/.env" | cut -d= -f2)" != "your_discord_token_here" ]; then echo "is set"; else echo "not set"; fi)"
+echo "DISCORD_DEV_BOT_TOKEN: $(if grep -q "DISCORD_DEV_BOT_TOKEN=" "$APP_DIR/.env" && [ "$(grep "DISCORD_DEV_BOT_TOKEN=" "$APP_DIR/.env" | cut -d= -f2)" != "your_discord_token_here" ]; then echo "is set"; else echo "not set"; fi)"
+echo "AWS_ACCESS_KEY_ID: $(if grep -q "AWS_ACCESS_KEY_ID=" "$APP_DIR/.env" && [ "$(grep "AWS_ACCESS_KEY_ID=" "$APP_DIR/.env" | cut -d= -f2)" != "" ]; then echo "is set"; else echo "not set"; fi)"
+echo "AWS_DEV_S3_BUCKET: $(if grep -q "AWS_DEV_S3_BUCKET=" "$APP_DIR/.env" && [ "$(grep "AWS_DEV_S3_BUCKET=" "$APP_DIR/.env" | cut -d= -f2)" != "" ]; then echo "is set"; else echo "not set"; fi)"
 echo "YOLO_URL: $(grep "YOLO_URL=" "$APP_DIR/.env" | cut -d= -f2)"
 echo "OLLAMA_URL: $(grep "OLLAMA_URL=" "$APP_DIR/.env" | cut -d= -f2)"
 
