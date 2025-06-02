@@ -442,6 +442,20 @@ class ImageProcessingBot(Bot):
             Concatenate the last two images sent in the channel.
             Usage: !concat [horizontal|vertical]
             """
+            # Check if this message has already been processed
+            # Store processed message IDs in a class variable if it doesn't exist
+            if not hasattr(self, '_processed_message_ids'):
+                self._processed_message_ids = set()
+                
+            # Check if we've already processed this message
+            if ctx.message.id in self._processed_message_ids:
+                logger.info(f"Skipping already processed concat message ID: {ctx.message.id}")
+                return
+                
+            # Mark this message as processed
+            self._processed_message_ids.add(ctx.message.id)
+            logger.info(f"Processing concat for message ID: {ctx.message.id}")
+            
             if direction not in ['horizontal', 'vertical']:
                 await ctx.send("Direction must be either 'horizontal' or 'vertical'")
                 return
@@ -485,6 +499,20 @@ class ImageProcessingBot(Bot):
 
     async def process_image(self, ctx, operation, **kwargs):
         """Process an image attachment with the specified operation"""
+        # Check if this message has already been processed
+        # Store processed message IDs in a class variable if it doesn't exist
+        if not hasattr(self, '_processed_message_ids'):
+            self._processed_message_ids = set()
+            
+        # Check if we've already processed this message
+        if ctx.message.id in self._processed_message_ids:
+            logger.info(f"Skipping already processed message ID: {ctx.message.id}")
+            return
+            
+        # Mark this message as processed
+        self._processed_message_ids.add(ctx.message.id)
+        logger.info(f"Processing image for message ID: {ctx.message.id}")
+        
         if not ctx.message.attachments:
             await ctx.send("Please attach an image to process.")
             return
@@ -543,6 +571,20 @@ class ImageProcessingBot(Bot):
 
     async def detect_objects(self, ctx):
         """Send image to YOLO service for object detection"""
+        # Check if this message has already been processed
+        # Store processed message IDs in a class variable if it doesn't exist
+        if not hasattr(self, '_processed_message_ids'):
+            self._processed_message_ids = set()
+            
+        # Check if we've already processed this message
+        if ctx.message.id in self._processed_message_ids:
+            logger.info(f"Skipping already processed message ID: {ctx.message.id}")
+            return
+            
+        # Mark this message as processed
+        self._processed_message_ids.add(ctx.message.id)
+        logger.info(f"Processing object detection for message ID: {ctx.message.id}")
+        
         if not ctx.message.attachments:
             await ctx.send("Please attach an image to detect objects.")
             return
@@ -614,6 +656,20 @@ class ImageProcessingBot(Bot):
 
     async def ask_ollama(self, ctx, question):
         """Send a question to Ollama and return the response"""
+        # Check if this message has already been processed
+        # Store processed message IDs in a class variable if it doesn't exist
+        if not hasattr(self, '_processed_message_ids'):
+            self._processed_message_ids = set()
+            
+        # Check if we've already processed this message
+        if ctx.message.id in self._processed_message_ids:
+            logger.info(f"Skipping already processed ask_ollama message ID: {ctx.message.id}")
+            return
+            
+        # Mark this message as processed
+        self._processed_message_ids.add(ctx.message.id)
+        logger.info(f"Processing ask_ollama for message ID: {ctx.message.id}")
+        
         # Let the user know we're working on it
         processing_msg = await ctx.send(f"🤔 Thinking about: '{question}' ... Please wait.")
 
@@ -679,6 +735,20 @@ class ImageProcessingBot(Bot):
 
     async def song_recommendation_flow(self, ctx):
         """Interactive flow to get song recommendations based on user preferences"""
+        # Check if this message has already been processed
+        # Store processed message IDs in a class variable if it doesn't exist
+        if not hasattr(self, '_processed_message_ids'):
+            self._processed_message_ids = set()
+            
+        # Check if we've already processed this message
+        if ctx.message.id in self._processed_message_ids:
+            logger.info(f"Skipping already processed song_recommendation_flow message ID: {ctx.message.id}")
+            return
+            
+        # Mark this message as processed
+        self._processed_message_ids.add(ctx.message.id)
+        logger.info(f"Processing song_recommendation_flow for message ID: {ctx.message.id}")
+        
         # Add user to active conversations to prevent default handler from responding
         self.active_conversations.add(ctx.author.id)
 
@@ -902,6 +972,20 @@ Description: This upbeat track perfectly captures the happy mood with its catchy
 
     async def spotify_search(self, ctx, search_type, search_query):
         """Search for content on Spotify and provide a link that opens in the Spotify app"""
+        # Check if this message has already been processed
+        # Store processed message IDs in a class variable if it doesn't exist
+        if not hasattr(self, '_processed_message_ids'):
+            self._processed_message_ids = set()
+            
+        # Check if we've already processed this message
+        if ctx.message.id in self._processed_message_ids:
+            logger.info(f"Skipping already processed spotify_search message ID: {ctx.message.id}")
+            return
+            
+        # Mark this message as processed
+        self._processed_message_ids.add(ctx.message.id)
+        logger.info(f"Processing spotify_search for message ID: {ctx.message.id}")
+        
         # Validate search type
         valid_types = ['track', 'artist', 'album', 'playlist']
         if search_type not in valid_types:
