@@ -20,6 +20,8 @@ Environment=YOLO_URL=http://10.0.1.90:8081/predict
 Environment=OLLAMA_URL=http://10.0.0.136:11434/api/chat
 Environment=OLLAMA_MODEL=gemma3:1b
 Environment=STATUS_SERVER_PORT=8443
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target 

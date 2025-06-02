@@ -2,7 +2,7 @@ import os
 import asyncio
 import threading
 from dotenv import load_dotenv
-from polybot.bot import ImageProcessingBot
+from bot import ImageProcessingBot
 from loguru import logger
 from fastapi import FastAPI
 import uvicorn

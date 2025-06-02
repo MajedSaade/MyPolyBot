@@ -66,7 +66,14 @@ echo "Checking service status..."
 if ! systemctl is-active --quiet $SERVICE_NAME; then
     echo "❌ $SERVICE_NAME failed to start. Checking logs..."
     sudo systemctl status $SERVICE_NAME --no-pager
-    echo "Full logs available with: sudo journalctl -u $SERVICE_NAME -n 20"
+    echo "Detailed logs:"
+    sudo journalctl -u $SERVICE_NAME -n 30 --no-pager
+    
+    # Try to run the script directly to see the error
+    echo "Attempting to run the script directly to see the error:"
+    sudo -u ubuntu $VENV_PATH/bin/python $APP_DIR/polybot/app.py
+    
+    echo "Full logs available with: sudo journalctl -u $SERVICE_NAME -n 50"
     exit 1
 fi
 
