@@ -46,20 +46,26 @@ class Img:
 
         self.data = gray.tolist()
 
-    def save_img(self):
+    def save_img(self, chat_id=None):
+        """
+        Save the processed image locally and to S3 bucket
+        
+        Args:
+            chat_id: Optional chat ID to organize images by user in S3
+            
+        Returns:
+            Path to the saved image
+        """
+        # Create a new filename with _filtered suffix
         new_path = self.path.with_name(self.path.stem + '_filtered' + self.path.suffix)
+        
+        # Save the image locally first
         imsave(new_path, np.array(self.data) / 255.0, cmap='gray')  # Normalize for saving
 
         logger.info(f"Image saved locally at: {new_path}")
         logger.info(f"Absolute path: {os.path.abspath(new_path)}")
         logger.info(f"File exists: {os.path.exists(new_path)}")
         logger.info(f"File size: {os.path.getsize(new_path)} bytes")
-
-        # Skip S3 connectivity test for performance in production
-        # test_s3_upload_success = test_s3_connectivity()
-        # if not test_s3_upload_success:
-        #     logger.error("Test S3 upload failed - S3 connectivity issues detected")
-        #     return new_path
             
         # Check if we have AWS credentials before attempting to upload
         aws_access_key = os.environ.get('AWS_ACCESS_KEY_ID')
@@ -94,25 +100,31 @@ class Img:
                     region_name=aws_region
                 )
 
-                # Upload the file
-                object_name = new_path.name  # Use just the file name for S3 key
-                logger.info(
-                    f"Starting upload of {object_name} ({os.path.getsize(new_path)} bytes) to S3 bucket {bucket_name}")
+                # Structure folders in S3 by chat_id if provided
+                if chat_id:
+                    # Structure: <bucket_name>/<chat_id>/predicted/<image_name>
+                    object_key = f"{chat_id}/predicted/{new_path.name}"
+                    # Also upload original image
+                    original_key = f"{chat_id}/original/{self.path.name}"
+                    try:
+                        # Upload original image if it exists and is readable
+                        if os.path.exists(self.path) and os.access(self.path, os.R_OK):
+                            logger.info(f"Uploading original image to S3: {original_key}")
+                            s3.upload_file(str(self.path), bucket_name, original_key)
+                            logger.info(f"Original image uploaded to S3: {original_key}")
+                    except Exception as e:
+                        logger.error(f"Error uploading original image to S3: {str(e)}")
+                else:
+                    # If no chat_id, use simpler structure
+                    object_key = new_path.name
 
-                # Check if file exists in S3 before uploading
-                file_exists = False
-                try:
-                    s3.head_object(Bucket=bucket_name, Key=object_name)
-                    logger.warning(f"File {object_name} already exists in S3 bucket {bucket_name}")
-                    file_exists = True
-                except Exception:
-                    logger.info(f"File {object_name} does not exist in bucket yet, proceeding with upload")
+                logger.info(f"Starting upload of {object_key} ({os.path.getsize(new_path)} bytes) to S3 bucket {bucket_name}")
 
-                # Perform the upload - try using a different method for reliability
+                # Try multiple upload methods for reliability
                 try:
                     # Method 1: Use upload_file
                     logger.info(f"Attempting upload with boto3.client.upload_file")
-                    s3.upload_file(str(new_path), bucket_name, object_name)
+                    s3.upload_file(str(new_path), bucket_name, object_key)
                     upload_success = True
                 except Exception as e1:
                     logger.warning(f"First upload method failed: {str(e1)}")
@@ -120,7 +132,7 @@ class Img:
                         # Method 2: Use put_object with file content
                         logger.info(f"Attempting upload with boto3.client.put_object")
                         with open(str(new_path), 'rb') as data:
-                            s3.put_object(Bucket=bucket_name, Key=object_name, Body=data.read())
+                            s3.put_object(Bucket=bucket_name, Key=object_key, Body=data.read())
                         upload_success = True
                     except Exception as e2:
                         logger.error(f"Second upload method also failed: {str(e2)}")
@@ -129,7 +141,7 @@ class Img:
                             logger.info(f"Attempting upload with AWS CLI")
                             import subprocess
                             result = subprocess.run(
-                                ['aws', 's3', 'cp', str(new_path), f"s3://{bucket_name}/{object_name}"],
+                                ['aws', 's3', 'cp', str(new_path), f"s3://{bucket_name}/{object_key}"],
                                 capture_output=True, text=True)
                             if result.returncode == 0:
                                 logger.info(f"AWS CLI upload successful")
@@ -142,29 +154,27 @@ class Img:
                             raise e3
 
                 if upload_success:
-                    logger.info(f"Successfully uploaded {object_name} to S3 bucket {bucket_name}")
+                    logger.info(f"Successfully uploaded {object_key} to S3 bucket {bucket_name}")
+                    
+                    # Try to generate a presigned URL for the uploaded image (helpful for debugging)
+                    try:
+                        url = s3.generate_presigned_url(
+                            'get_object',
+                            Params={'Bucket': bucket_name, 'Key': object_key},
+                            ExpiresIn=3600  # URL valid for 1 hour
+                        )
+                        logger.info(f"Presigned URL for uploaded image: {url}")
+                    except Exception as e:
+                        logger.warning(f"Could not generate presigned URL: {str(e)}")
+                        
+                    # Verify upload
+                    try:
+                        response = s3.head_object(Bucket=bucket_name, Key=object_key)
+                        logger.info(f"Verified file exists in S3: {object_key}, Size: {response['ContentLength']} bytes")
+                    except Exception as e:
+                        logger.error(f"Failed to verify file in S3 after upload: {e}")
                 else:
-                    logger.error(f"Failed to upload {object_name} to S3 bucket {bucket_name}")
-                
-                # Try alternate validation method with AWS CLI
-                try:
-                    # Use AWS CLI command for verification
-                    import subprocess
-                    result = subprocess.run(['aws', 's3', 'ls', f"s3://{bucket_name}/{object_name}"], 
-                                           capture_output=True, text=True)
-                    if result.returncode == 0 and object_name in result.stdout:
-                        logger.info(f"AWS CLI verified file exists in S3: {object_name}")
-                    else:
-                        logger.warning(f"AWS CLI could not verify file in S3: {result.stderr}")
-                except Exception as cli_error:
-                    logger.warning(f"AWS CLI verification error: {str(cli_error)}")
-
-                # Verify upload by checking if the file exists in S3
-                try:
-                    response = s3.head_object(Bucket=bucket_name, Key=object_name)
-                    logger.info(f"Verified file exists in S3: {object_name}, Size: {response['ContentLength']} bytes")
-                except Exception as e:
-                    logger.error(f"Failed to verify file in S3 after upload: {e}")
+                    logger.error(f"Failed to upload {object_key} to S3 bucket {bucket_name}")
 
             except Exception as e:
                 logger.error(f"Error uploading to S3: {str(e)}")

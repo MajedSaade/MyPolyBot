@@ -12,6 +12,7 @@ from polybot.img_proc import Img
 import json
 import asyncio
 import dotenv
+import boto3
 
 # Load environment variables from .env file to ensure AWS credentials are available
 env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
@@ -533,26 +534,12 @@ class ImageProcessingBot(Bot):
                 logger.warning(f"AWS_REGION: {aws_region if aws_region else 'Not set'}")
                 logger.warning(f"AWS_DEV_S3_BUCKET: {bucket_name if bucket_name else 'Not set'}")
             
-            new_path = img.save_img()
+            # Pass the channel ID as chat_id for better organization in S3
+            chat_id = str(ctx.channel.id)
+            logger.info(f"Using channel ID {chat_id} for S3 organization")
+            new_path = img.save_img(chat_id=chat_id)
             logger.info(f"Image saved to: {new_path}")
             
-            # Verify the image was uploaded to S3
-            try:
-                import subprocess
-                bucket_name = os.environ.get('AWS_DEV_S3_BUCKET')
-                object_name = os.path.basename(new_path)
-                
-                logger.info(f"Verifying S3 upload to bucket {bucket_name}, object {object_name}")
-                result = subprocess.run(['aws', 's3', 'ls', f"s3://{bucket_name}/{object_name}"], 
-                                      capture_output=True, text=True)
-                
-                if result.returncode == 0 and object_name in result.stdout:
-                    logger.info(f"S3 upload verified: {object_name} is in bucket {bucket_name}")
-                else:
-                    logger.warning(f"Could not verify S3 upload for {object_name}. AWS CLI output: {result.stderr}")
-            except Exception as e:
-                logger.error(f"Error verifying S3 upload: {str(e)}")
-
             # Send the processed image
             await ctx.send(f"Processed image with {operation}:", file=discord.File(new_path))
             logger.info(f"Sent processed image to Discord")
@@ -580,14 +567,67 @@ class ImageProcessingBot(Bot):
             # Let the user know we're working on it
             processing_msg = await ctx.send("🔍 Detecting objects in your image... Please wait.")
 
-            # Send the image to YOLO service
+            # Use chat_id for S3 organization
+            chat_id = str(ctx.channel.id)
+            logger.info(f"Using channel ID {chat_id} for S3 organization")
+            
+            # Get S3 bucket information
+            aws_access_key = os.environ.get('AWS_ACCESS_KEY_ID')
+            aws_secret_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
+            aws_region = os.environ.get('AWS_REGION')
+            bucket_name = os.environ.get('AWS_DEV_S3_BUCKET') or os.environ.get('AWS_S3_BUCKET')
+            
+            # Check if we have S3 credentials
+            s3_enabled = all([aws_access_key, aws_secret_key, aws_region, bucket_name])
+            logger.info(f"S3 integration enabled: {s3_enabled}")
+
+            # If S3 is enabled, upload the original image first
+            s3_image_key = None
+            if s3_enabled:
+                try:
+                    # Initialize S3 client
+                    s3 = boto3.client(
+                        's3',
+                        aws_access_key_id=aws_access_key,
+                        aws_secret_access_key=aws_secret_key,
+                        region_name=aws_region
+                    )
+                    
+                    # Create the S3 object key
+                    file_name = os.path.basename(file_path)
+                    s3_image_key = f"{chat_id}/original/{file_name}"
+                    
+                    # Upload the image to S3
+                    logger.info(f"Uploading original image to S3: {s3_image_key}")
+                    s3.upload_file(file_path, bucket_name, s3_image_key)
+                    logger.info(f"Successfully uploaded original image to S3: {s3_image_key}")
+                except Exception as e:
+                    logger.error(f"Error uploading to S3: {str(e)}")
+                    s3_image_key = None
+            
+            # Send the image to YOLO service, with S3 info if available
             with open(file_path, 'rb') as img_file:
                 try:
-                    # FIXED LINE: Removed the "/predict" from the URL since it's already in self.yolo_url
                     logger.info(f"[DEBUG] Sending request to: {self.yolo_url}")
+                    
+                    # Prepare the payload
+                    files = {"file": img_file}
+                    data = {}
+                    
+                    # If S3 is enabled, include S3 info in the request
+                    if s3_enabled and s3_image_key:
+                        data = {
+                            "s3_bucket": bucket_name,
+                            "s3_key": s3_image_key,
+                            "chat_id": chat_id
+                        }
+                        logger.info(f"Included S3 information in YOLO request: {data}")
+                    
+                    # Send the request to the YOLO service
                     response = requests.post(
                         self.yolo_url,
-                        files={"file": img_file}
+                        files=files,
+                        data=data
                     )
 
                     # Check if the request was successful
@@ -602,7 +642,11 @@ class ImageProcessingBot(Bot):
                     # Extract detected objects
                     objects = result.get("labels", [])
                     count = result.get("detection_count", 0)
-
+                    
+                    # Check if a predicted image was saved in S3
+                    predicted_s3_key = result.get("predicted_s3_key")
+                    s3_url = result.get("s3_url")
+                    
                     if count == 0:
                         await processing_msg.edit(content="No objects detected in the image.")
                     else:
@@ -623,8 +667,26 @@ class ImageProcessingBot(Bot):
                                 detection_msg += f"\n• {obj}"
                             else:
                                 detection_msg += f"\n• {obj} ({cnt})"
+                        
+                        # If we got a predicted image URL, include it in the message
+                        if s3_url:
+                            detection_msg += f"\n\nProcessed image available at: {s3_url}"
 
                         await processing_msg.edit(content=detection_msg)
+                        
+                        # If a predicted image was returned and saved in S3, download and send it
+                        if predicted_s3_key and s3_enabled:
+                            try:
+                                # Download the predicted image from S3
+                                predicted_file_path = f"{os.path.dirname(file_path)}/predicted_{os.path.basename(file_path)}"
+                                logger.info(f"Downloading predicted image from S3: {predicted_s3_key}")
+                                s3.download_file(bucket_name, predicted_s3_key, predicted_file_path)
+                                
+                                # Send the predicted image
+                                await ctx.send(file=discord.File(predicted_file_path))
+                                logger.info(f"Sent predicted image from S3 to Discord")
+                            except Exception as e:
+                                logger.error(f"Error downloading predicted image from S3: {str(e)}")
                 except requests.RequestException as e:
                     logger.error(f"Error connecting to YOLO service: {e}")
                     await processing_msg.edit(
