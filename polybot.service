@@ -8,7 +8,7 @@ StartLimitIntervalSec=0
 Type=simple
 User=ubuntu
 WorkingDirectory=/home/ubuntu/MyPolyBot
-ExecStart=/home/ubuntu/MyPolyBot/.venv/bin/python -m polybot.app
+ExecStart=/home/ubuntu/MyPolyBot/.venv/bin/python /home/ubuntu/MyPolyBot/polybot/app.py
 Restart=on-failure
 RestartSec=10
 Environment=PYTHONUNBUFFERED=1
