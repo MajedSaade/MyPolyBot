@@ -375,7 +375,38 @@ class ImageProcessingBot(Bot):
         self.ollama_model = os.environ.get('OLLAMA_MODEL', 'gemma3:1b')
         logger.info(f"Ollama service URL set to: {self.ollama_url}")
         logger.info(f"Ollama model set to: {self.ollama_model}")
-
+        
+        # Keep track of recently processed command messages to prevent double processing
+        self.recent_command_ids = set()
+        self.max_recent_commands = 100  # Maximum number of message IDs to keep track of
+        
+        # Override the on_message handler to fix the double processing issue
+        @self.client.event
+        async def on_message(message):
+            # Avoid responding to own messages
+            if message.author == self.client.user:
+                return
+                
+            # Limit the size of recent_command_ids to prevent memory issues
+            if len(self.recent_command_ids) > self.max_recent_commands:
+                # Just clear the set when it gets too large - IDs from old messages are unlikely to be reused
+                self.recent_command_ids.clear()
+                
+            # First check if it's a command and process it
+            if message.content.startswith('!'):
+                # Add this message ID to the recent commands set to prevent double processing
+                self.recent_command_ids.add(message.id)
+                await self.client.process_commands(message)
+                return  # Don't continue to message handler after processing a command
+                
+            # Only handle non-command messages with the default handler
+            # when not in an active conversation and not from a recent command
+            if (message.author.id not in self.active_conversations and 
+                message.id not in self.recent_command_ids):
+                # Check if this is an instance of Bot and not a subclass that overrides handle_message
+                if self.__class__ == Bot or not hasattr(self.__class__, 'handle_message'):
+                    await self.handle_message(message)
+        
         # Register commands
         @self.client.command(name='blur')
         async def blur(ctx, blur_level: int = 16):
