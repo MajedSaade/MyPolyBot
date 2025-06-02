@@ -43,7 +43,10 @@ class Bot:
             # Only handle non-command messages with the default handler
             # when not in an active conversation
             if message.author.id not in self.active_conversations:
-                await self.handle_message(message)
+                # Check if this is an instance of Bot and not a subclass that overrides handle_message
+                # This prevents multiple responses when subclasses like QuoteBot handle messages
+                if self.__class__ == Bot or not hasattr(self.__class__, 'handle_message'):
+                    await self.handle_message(message)
 
     async def start(self):
         """Start the Discord bot"""
