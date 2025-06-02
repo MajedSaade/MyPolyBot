@@ -55,11 +55,11 @@ class Img:
         logger.info(f"File exists: {os.path.exists(new_path)}")
         logger.info(f"File size: {os.path.getsize(new_path)} bytes")
 
-        # Run a test S3 upload first to verify connectivity
-        test_s3_upload_success = test_s3_connectivity()
-        if not test_s3_upload_success:
-            logger.error("Test S3 upload failed - S3 connectivity issues detected")
-            return new_path
+        # Skip S3 connectivity test for performance in production
+        # test_s3_upload_success = test_s3_connectivity()
+        # if not test_s3_upload_success:
+        #     logger.error("Test S3 upload failed - S3 connectivity issues detected")
+        #     return new_path
             
         # Check if we have AWS credentials before attempting to upload
         aws_access_key = os.environ.get('AWS_ACCESS_KEY_ID')
@@ -83,6 +83,7 @@ class Img:
 
         # Only attempt to upload if we have all required AWS credentials
         if aws_access_key and aws_secret_key and aws_region and bucket_name:
+            upload_success = False
             try:
                 # Initialize S3 client
                 logger.info(f"Initializing S3 client for region: {aws_region}")
@@ -99,9 +100,11 @@ class Img:
                     f"Starting upload of {object_name} ({os.path.getsize(new_path)} bytes) to S3 bucket {bucket_name}")
 
                 # Check if file exists in S3 before uploading
+                file_exists = False
                 try:
                     s3.head_object(Bucket=bucket_name, Key=object_name)
                     logger.warning(f"File {object_name} already exists in S3 bucket {bucket_name}")
+                    file_exists = True
                 except Exception:
                     logger.info(f"File {object_name} does not exist in bucket yet, proceeding with upload")
 
@@ -110,6 +113,7 @@ class Img:
                     # Method 1: Use upload_file
                     logger.info(f"Attempting upload with boto3.client.upload_file")
                     s3.upload_file(str(new_path), bucket_name, object_name)
+                    upload_success = True
                 except Exception as e1:
                     logger.warning(f"First upload method failed: {str(e1)}")
                     try:
@@ -117,13 +121,32 @@ class Img:
                         logger.info(f"Attempting upload with boto3.client.put_object")
                         with open(str(new_path), 'rb') as data:
                             s3.put_object(Bucket=bucket_name, Key=object_name, Body=data.read())
+                        upload_success = True
                     except Exception as e2:
                         logger.error(f"Second upload method also failed: {str(e2)}")
-                        raise e2
+                        # Try method 3: AWS CLI
+                        try:
+                            logger.info(f"Attempting upload with AWS CLI")
+                            import subprocess
+                            result = subprocess.run(
+                                ['aws', 's3', 'cp', str(new_path), f"s3://{bucket_name}/{object_name}"],
+                                capture_output=True, text=True)
+                            if result.returncode == 0:
+                                logger.info(f"AWS CLI upload successful")
+                                upload_success = True
+                            else:
+                                logger.error(f"AWS CLI upload failed: {result.stderr}")
+                                raise Exception(f"AWS CLI upload failed: {result.stderr}")
+                        except Exception as e3:
+                            logger.error(f"All upload methods failed: {str(e3)}")
+                            raise e3
 
-                logger.info(f"Successfully uploaded {object_name} to S3 bucket {bucket_name}")
+                if upload_success:
+                    logger.info(f"Successfully uploaded {object_name} to S3 bucket {bucket_name}")
+                else:
+                    logger.error(f"Failed to upload {object_name} to S3 bucket {bucket_name}")
                 
-                # Try alternate validation method
+                # Try alternate validation method with AWS CLI
                 try:
                     # Use AWS CLI command for verification
                     import subprocess

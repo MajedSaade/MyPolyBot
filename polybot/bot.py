@@ -11,7 +11,24 @@ from pathlib import Path
 from polybot.img_proc import Img
 import json
 import asyncio
+import dotenv
 
+# Load environment variables from .env file to ensure AWS credentials are available
+env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
+if os.path.exists(env_path):
+    dotenv.load_dotenv(env_path)
+    # Explicitly set environment variables from loaded .env file for S3 access
+    with open(env_path, 'r') as f:
+        for line in f:
+            if line.strip() and not line.startswith('#'):
+                try:
+                    key, value = line.strip().split('=', 1)
+                    os.environ[key] = value
+                    if key.startswith('AWS_'):
+                        logger.info(f"Bot loaded environment variable: {key}")
+                except ValueError:
+                    # Skip lines that don't have key=value format
+                    pass
 
 class Bot:
     def __init__(self, token):
@@ -502,8 +519,39 @@ class ImageProcessingBot(Bot):
 
             # Save the processed image
             logger.info("Saving processed image and uploading to S3...")
+            
+            # Ensure AWS environment variables are loaded before saving/uploading
+            aws_access_key = os.environ.get('AWS_ACCESS_KEY_ID')
+            aws_secret_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
+            aws_region = os.environ.get('AWS_REGION')
+            bucket_name = os.environ.get('AWS_DEV_S3_BUCKET')
+            
+            if not all([aws_access_key, aws_secret_key, aws_region, bucket_name]):
+                logger.warning("Missing AWS credentials, S3 upload may fail")
+                logger.warning(f"AWS_ACCESS_KEY_ID: {'Set' if aws_access_key else 'Not set'}")
+                logger.warning(f"AWS_SECRET_ACCESS_KEY: {'Set' if aws_secret_key else 'Not set'}")
+                logger.warning(f"AWS_REGION: {aws_region if aws_region else 'Not set'}")
+                logger.warning(f"AWS_DEV_S3_BUCKET: {bucket_name if bucket_name else 'Not set'}")
+            
             new_path = img.save_img()
             logger.info(f"Image saved to: {new_path}")
+            
+            # Verify the image was uploaded to S3
+            try:
+                import subprocess
+                bucket_name = os.environ.get('AWS_DEV_S3_BUCKET')
+                object_name = os.path.basename(new_path)
+                
+                logger.info(f"Verifying S3 upload to bucket {bucket_name}, object {object_name}")
+                result = subprocess.run(['aws', 's3', 'ls', f"s3://{bucket_name}/{object_name}"], 
+                                      capture_output=True, text=True)
+                
+                if result.returncode == 0 and object_name in result.stdout:
+                    logger.info(f"S3 upload verified: {object_name} is in bucket {bucket_name}")
+                else:
+                    logger.warning(f"Could not verify S3 upload for {object_name}. AWS CLI output: {result.stderr}")
+            except Exception as e:
+                logger.error(f"Error verifying S3 upload: {str(e)}")
 
             # Send the processed image
             await ctx.send(f"Processed image with {operation}:", file=discord.File(new_path))
