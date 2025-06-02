@@ -71,9 +71,15 @@ class Bot:
         if not self.is_current_msg_photo(message):
             raise RuntimeError(f'Message content of type photo expected')
         attachment = message.attachments[0]
-        folder_name = 'photos'
+        
+        # Use a consistent absolute path for the photos directory
+        # Get the project root directory
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        folder_name = os.path.join(project_root, 'photos')
+        
         if not os.path.exists(folder_name):
             os.makedirs(folder_name)
+        
         file_path = f"{folder_name}/{attachment.filename}"
         await attachment.save(file_path)
         return file_path
