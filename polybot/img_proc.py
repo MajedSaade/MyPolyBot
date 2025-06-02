@@ -11,7 +11,18 @@ import time
 import dotenv
 
 # Load environment variables from .env file
-dotenv.load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env'))
+env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
+dotenv.load_dotenv(dotenv_path=env_path)
+
+# Explicitly set environment variables from loaded .env file for S3 access
+if os.path.exists(env_path):
+    with open(env_path, 'r') as f:
+        for line in f:
+            if line.strip() and not line.startswith('#'):
+                key, value = line.strip().split('=', 1)
+                os.environ[key] = value
+                if key.startswith('AWS_'):
+                    logger.info(f"Set environment variable: {key}")
 
 
 def rgb2gray(rgb):
