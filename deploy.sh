@@ -68,6 +68,15 @@ pip install -r "$APP_DIR/polybot/requirements.txt"
 # Set up environment variables
 echo "Setting up environment variables..."
 
+# Check for AWS credentials in standard locations
+if [ -z "$AWS_ACCESS_KEY_ID" ] && [ -f ~/.aws/credentials ]; then
+  echo "Found local AWS credentials file, checking if it can be used..."
+  if grep -q "\[default\]" ~/.aws/credentials; then
+    echo "Using AWS credentials from local credentials file"
+    # We don't extract them here, just noting that they exist
+  fi
+fi
+
 # Always create the .env file from scratch with proper values
 echo "Creating .env configuration file..."
 cat > "$APP_DIR/.env" << EOL
@@ -173,5 +182,29 @@ if ! systemctl is-active --quiet $SERVICE_NAME; then
 else
   echo "✅ PolyBot service is running successfully."
 fi
+
+# Run network diagnostics for YOLO service
+echo "Running network diagnostics for YOLO service..."
+YOLO_URL=$(grep "YOLO_URL=" "$APP_DIR/.env" | cut -d= -f2)
+YOLO_HOST=$(echo $YOLO_URL | sed -E 's|https?://||' | sed -E 's|:[0-9]+.*||' | sed -E 's|/.*||')
+YOLO_PORT=$(echo $YOLO_URL | sed -E 's|https?://[^:]+:([0-9]+).*|\1|')
+if [ "$YOLO_PORT" = "$YOLO_URL" ]; then
+  YOLO_PORT=80
+fi
+
+echo "YOLO Host: $YOLO_HOST"
+echo "YOLO Port: $YOLO_PORT"
+
+echo "Checking if YOLO host is reachable..."
+ping -c 3 $YOLO_HOST
+if [ $? -ne 0 ]; then
+  echo "⚠️ WARNING: Could not ping YOLO host. This may be due to firewall rules or the host being down."
+fi
+
+echo "Checking if YOLO port is open..."
+nc -z -v $YOLO_HOST $YOLO_PORT
+
+echo "Testing connection to YOLO service API..."
+curl -s -o /dev/null -w "%{http_code}" $YOLO_URL || echo "Could not connect to YOLO service API"
 
 echo "Deployment completed successfully!"

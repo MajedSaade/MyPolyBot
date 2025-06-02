@@ -5,6 +5,7 @@ import numpy as np
 import random
 import boto3
 import os
+from loguru import logger
 
 
 def rgb2gray(rgb):
@@ -38,10 +39,18 @@ class Img:
         aws_region = os.getenv('AWS_REGION')
         bucket_name = os.getenv('AWS_DEV_S3_BUCKET')
 
+        # Log S3 upload attempt details (without exposing sensitive data)
+        logger.info(f"Checking S3 upload requirements...")
+        logger.info(f"AWS Access Key ID: {'Set' if aws_access_key else 'Not set'}")
+        logger.info(f"AWS Secret Access Key: {'Set' if aws_secret_key else 'Not set'}")
+        logger.info(f"AWS Region: {aws_region if aws_region else 'Not set'}")
+        logger.info(f"S3 Bucket: {bucket_name if bucket_name else 'Not set'}")
+
         # Only attempt to upload if we have all required AWS credentials
         if aws_access_key and aws_secret_key and aws_region and bucket_name:
             try:
                 # Initialize S3 client
+                logger.info(f"Initializing S3 client for region: {aws_region}")
                 s3 = boto3.client(
                     's3',
                     aws_access_key_id=aws_access_key,
@@ -51,12 +60,19 @@ class Img:
 
                 # Upload the file
                 object_name = new_path.name  # Use just the file name for S3 key
+                logger.info(f"Uploading {object_name} to S3 bucket {bucket_name}")
                 s3.upload_file(str(new_path), bucket_name, object_name)
-                print(f"Uploaded {object_name} to S3 bucket {bucket_name}")
+                logger.success(f"Successfully uploaded {object_name} to S3 bucket {bucket_name}")
             except Exception as e:
-                print(f"Error uploading to S3: {e}")
+                logger.error(f"Error uploading to S3: {e}")
         else:
-            print("Skipping S3 upload - AWS credentials not configured")
+            logger.warning("Skipping S3 upload - AWS credentials not completely configured")
+            missing = []
+            if not aws_access_key: missing.append("AWS_ACCESS_KEY_ID")
+            if not aws_secret_key: missing.append("AWS_SECRET_ACCESS_KEY")
+            if not aws_region: missing.append("AWS_REGION")
+            if not bucket_name: missing.append("AWS_DEV_S3_BUCKET")
+            logger.warning(f"Missing AWS environment variables: {', '.join(missing)}")
 
         return new_path
 
