@@ -34,10 +34,15 @@ class Bot:
             # Avoid responding to own messages
             if message.author == self.client.user:
                 return
-            # Process commands
-            await self.client.process_commands(message)
-            # Default message handler - only if not in an active conversation
-            if not message.content.startswith('!') and message.author.id not in self.active_conversations:
+                
+            # First check if it's a command and process it
+            if message.content.startswith('!'):
+                await self.client.process_commands(message)
+                return  # Don't continue to message handler after processing a command
+                
+            # Only handle non-command messages with the default handler
+            # when not in an active conversation
+            if message.author.id not in self.active_conversations:
                 await self.handle_message(message)
 
     async def start(self):
