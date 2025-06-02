@@ -35,14 +35,19 @@ class Bot:
             if message.author == self.client.user:
                 return
                 
+            # Track if this message contained a command
+            command_processed = False
+                
             # First check if it's a command and process it
             if message.content.startswith('!'):
+                # Process the command and set the flag
                 await self.client.process_commands(message)
+                command_processed = True
                 return  # Don't continue to message handler after processing a command
                 
             # Only handle non-command messages with the default handler
-            # when not in an active conversation
-            if message.author.id not in self.active_conversations:
+            # when not in an active conversation and when no command was processed
+            if not command_processed and message.author.id not in self.active_conversations:
                 # Check if this is an instance of Bot and not a subclass that overrides handle_message
                 # This prevents multiple responses when subclasses like QuoteBot handle messages
                 if self.__class__ == Bot or not hasattr(self.__class__, 'handle_message'):
@@ -375,6 +380,24 @@ class ImageProcessingBot(Bot):
         self.ollama_model = os.environ.get('OLLAMA_MODEL', 'gemma3:1b')
         logger.info(f"Ollama service URL set to: {self.ollama_url}")
         logger.info(f"Ollama model set to: {self.ollama_model}")
+        
+        # Track processed command message IDs to prevent duplicate processing
+        self.processed_commands = set()
+        
+        # Remove the on_message event handler from the parent class to prevent duplicate message processing
+        # This is the key fix to prevent duplicate responses
+        self.client.remove_listener(self.client.event_listeners['on_message'][0])
+        
+        # Add our own on_message handler that only processes commands
+        @self.client.event
+        async def on_message(message):
+            # Avoid responding to own messages
+            if message.author == self.client.user:
+                return
+                
+            # Process commands only - don't call any message handlers
+            if message.content.startswith('!'):
+                await self.client.process_commands(message)
 
         # Register commands
         @self.client.command(name='blur')
@@ -429,7 +452,7 @@ class ImageProcessingBot(Bot):
             if direction not in ['horizontal', 'vertical']:
                 await ctx.send("Direction must be either 'horizontal' or 'vertical'")
                 return
-
+                
             # We need to find the two most recent image attachments
             channel = ctx.channel
             image_attachments = []
@@ -513,6 +536,9 @@ class ImageProcessingBot(Bot):
             new_path = img.save_img()
             logger.info(f"Image saved to: {new_path}")
 
+            # Log message ID to track duplicate sends
+            logger.info(f"About to send processed image for message ID: {ctx.message.id}")
+            
             # Send the processed image
             await ctx.send(f"Processed image with {operation}:", file=discord.File(new_path))
             logger.info(f"Sent processed image to Discord")
@@ -870,7 +896,7 @@ Description: This upbeat track perfectly captures the happy mood with its catchy
                     # Add Spotify link
                     spotify_search = f"{title} {artist}".replace(' ', '%20')
                     spotify_app_link = f"spotify:search:{spotify_search}"
-                    spotify_web_link = f"https://open.spotify.com/search/{spotify_search}/tracks"
+                    spotify_web_link = f"https://open.spotify.com/search/{spotify_search}"
                     
                     formatted_output += f"💬 {description}\n\n"
 
