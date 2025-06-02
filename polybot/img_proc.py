@@ -6,6 +6,7 @@ import random
 import boto3
 import os
 from loguru import logger
+import traceback
 
 
 def rgb2gray(rgb):
@@ -42,19 +43,21 @@ class Img:
         aws_access_key = os.getenv('AWS_ACCESS_KEY_ID')
         aws_secret_key = os.getenv('AWS_SECRET_ACCESS_KEY')
         aws_region = os.getenv('AWS_REGION')
+        
+        # Explicitly prioritize the dev bucket
         bucket_name = os.getenv('AWS_DEV_S3_BUCKET')
-
+        
         # Log S3 upload attempt details (without exposing sensitive data)
         logger.info(f"Checking S3 upload requirements...")
         logger.info(f"AWS Access Key ID: {'Set' if aws_access_key else 'Not set'}")
         logger.info(f"AWS Secret Access Key: {'Set' if aws_secret_key else 'Not set'}")
         logger.info(f"AWS Region: {aws_region if aws_region else 'Not set'}")
-        logger.info(f"S3 Bucket: {bucket_name if bucket_name else 'Not set'}")
+        logger.info(f"Target S3 Bucket (DEV): {bucket_name if bucket_name else 'Not set'}")
 
         # Try both bucket names if AWS_DEV_S3_BUCKET is not set
         if not bucket_name:
             bucket_name = os.getenv('AWS_S3_BUCKET')
-            logger.info(f"Trying alternate bucket name: {bucket_name if bucket_name else 'Not set'}")
+            logger.info(f"DEV bucket not set, trying production bucket: {bucket_name if bucket_name else 'Not set'}")
 
         # Only attempt to upload if we have all required AWS credentials
         if aws_access_key and aws_secret_key and aws_region and bucket_name:
@@ -82,7 +85,7 @@ class Img:
 
                 # Perform the upload
                 s3.upload_file(str(new_path), bucket_name, object_name)
-                logger.success(f"Successfully uploaded {object_name} to S3 bucket {bucket_name}")
+                logger.info(f"Successfully uploaded {object_name} to S3 bucket {bucket_name}")
 
                 # Verify upload by checking if the file exists in S3
                 try:
@@ -93,15 +96,20 @@ class Img:
 
             except Exception as e:
                 logger.error(f"Error uploading to S3: {str(e)}")
-                import traceback
+                logger.error(f"Error type: {type(e).__name__}")
                 logger.error(f"Traceback: {traceback.format_exc()}")
+                # Try to provide more detailed boto3 error info if available
+                if hasattr(e, 'response') and 'Error' in getattr(e, 'response', {}):
+                    error_info = e.response['Error']
+                    logger.error(f"AWS Error Code: {error_info.get('Code')}")
+                    logger.error(f"AWS Error Message: {error_info.get('Message')}")
         else:
             logger.warning("Skipping S3 upload - AWS credentials not completely configured")
             missing = []
             if not aws_access_key: missing.append("AWS_ACCESS_KEY_ID")
             if not aws_secret_key: missing.append("AWS_SECRET_ACCESS_KEY")
             if not aws_region: missing.append("AWS_REGION")
-            if not bucket_name: missing.append("AWS_DEV_S3_BUCKET")
+            if not bucket_name: missing.append("AWS_DEV_S3_BUCKET or AWS_S3_BUCKET")
             logger.warning(f"Missing AWS environment variables: {', '.join(missing)}")
 
         return new_path
