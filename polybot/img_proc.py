@@ -40,7 +40,7 @@ class Img:
             region_name=os.getenv('AWS_REGION')
         )
 
-        bucket_name = os.getenv('AWS_S3_BUCKET')
+        bucket_name = os.getenv('AWS_DEV_S3_BUCKET')
         object_name = new_path.name  # Use just the file name for S3 key
 
         try:
