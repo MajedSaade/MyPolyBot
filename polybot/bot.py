@@ -23,6 +23,8 @@ class Bot:
         self.token = token
         # Track active conversations to prevent default handler from responding
         self.active_conversations = set()
+        # Flag to indicate if this instance should only process commands (no message handling)
+        self.is_command_only = False
 
         # Set up event handlers
         @self.client.event
@@ -35,19 +37,14 @@ class Bot:
             if message.author == self.client.user:
                 return
                 
-            # Track if this message contained a command
-            command_processed = False
-                
             # First check if it's a command and process it
             if message.content.startswith('!'):
-                # Process the command and set the flag
                 await self.client.process_commands(message)
-                command_processed = True
                 return  # Don't continue to message handler after processing a command
                 
             # Only handle non-command messages with the default handler
-            # when not in an active conversation and when no command was processed
-            if not command_processed and message.author.id not in self.active_conversations:
+            # when not in an active conversation and when not a command-only bot
+            if not self.is_command_only and message.author.id not in self.active_conversations:
                 # Check if this is an instance of Bot and not a subclass that overrides handle_message
                 # This prevents multiple responses when subclasses like QuoteBot handle messages
                 if self.__class__ == Bot or not hasattr(self.__class__, 'handle_message'):
@@ -381,21 +378,17 @@ class ImageProcessingBot(Bot):
         logger.info(f"Ollama service URL set to: {self.ollama_url}")
         logger.info(f"Ollama model set to: {self.ollama_model}")
         
-        # Track processed command message IDs to prevent duplicate processing
-        self.processed_commands = set()
+        # Flag to prevent duplicate message processing
+        self.is_command_only = True
         
-        # Remove the on_message event handler from the parent class to prevent duplicate message processing
-        # This is the key fix to prevent duplicate responses
-        self.client.remove_listener(self.client.event_listeners['on_message'][0])
-        
-        # Add our own on_message handler that only processes commands
+        # Override the on_message handler with our own to prevent duplicate processing
         @self.client.event
         async def on_message(message):
             # Avoid responding to own messages
             if message.author == self.client.user:
                 return
                 
-            # Process commands only - don't call any message handlers
+            # Process commands only - don't call any message handlers for this subclass
             if message.content.startswith('!'):
                 await self.client.process_commands(message)
 
