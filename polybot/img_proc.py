@@ -30,7 +30,23 @@ class Img:
         self.data = gray.tolist()
 
     def save_img(self):
-        new_path = self.path.with_name(self.path.stem + '_filtered' + self.path.suffix)
+        # Get the project root directory to save files consistently
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        photos_dir = os.path.join(project_root, 'photos')
+        
+        # Ensure the photos directory exists
+        if not os.path.exists(photos_dir):
+            os.makedirs(photos_dir)
+        
+        # Get the filename from the original path
+        filename = os.path.basename(self.path)
+        name, ext = os.path.splitext(filename)
+        
+        # Create the new path in the project root photos directory
+        new_filename = f"{name}_filtered{ext}"
+        new_path = os.path.join(photos_dir, new_filename)
+        
+        # Save the image
         imsave(new_path, np.array(self.data) / 255.0, cmap='gray')  # Normalize for saving
         
         logger.info(f"Image saved locally at: {new_path}")
