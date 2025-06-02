@@ -30,25 +30,9 @@ class Img:
         self.data = gray.tolist()
 
     def save_img(self):
-        # Get the project root directory to save files consistently
-        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        photos_dir = os.path.join(project_root, 'photos')
-        
-        # Ensure the photos directory exists
-        if not os.path.exists(photos_dir):
-            os.makedirs(photos_dir)
-        
-        # Get the filename from the original path
-        filename = os.path.basename(self.path)
-        name, ext = os.path.splitext(filename)
-        
-        # Create the new path in the project root photos directory
-        new_filename = f"{name}_filtered{ext}"
-        new_path = os.path.join(photos_dir, new_filename)
-        
-        # Save the image
+        new_path = self.path.with_name(self.path.stem + '_filtered' + self.path.suffix)
         imsave(new_path, np.array(self.data) / 255.0, cmap='gray')  # Normalize for saving
-        
+
         logger.info(f"Image saved locally at: {new_path}")
         logger.info(f"Absolute path: {os.path.abspath(new_path)}")
         logger.info(f"File exists: {os.path.exists(new_path)}")
@@ -66,7 +50,7 @@ class Img:
         logger.info(f"AWS Secret Access Key: {'Set' if aws_secret_key else 'Not set'}")
         logger.info(f"AWS Region: {aws_region if aws_region else 'Not set'}")
         logger.info(f"S3 Bucket: {bucket_name if bucket_name else 'Not set'}")
-        
+
         # Try both bucket names if AWS_DEV_S3_BUCKET is not set
         if not bucket_name:
             bucket_name = os.getenv('AWS_S3_BUCKET')
@@ -86,26 +70,27 @@ class Img:
 
                 # Upload the file
                 object_name = new_path.name  # Use just the file name for S3 key
-                logger.info(f"Starting upload of {object_name} ({os.path.getsize(new_path)} bytes) to S3 bucket {bucket_name}")
-                
+                logger.info(
+                    f"Starting upload of {object_name} ({os.path.getsize(new_path)} bytes) to S3 bucket {bucket_name}")
+
                 # Check if file exists in S3 before uploading
                 try:
                     s3.head_object(Bucket=bucket_name, Key=object_name)
                     logger.warning(f"File {object_name} already exists in S3 bucket {bucket_name}")
                 except Exception:
                     logger.info(f"File {object_name} does not exist in bucket yet, proceeding with upload")
-                
+
                 # Perform the upload
                 s3.upload_file(str(new_path), bucket_name, object_name)
                 logger.success(f"Successfully uploaded {object_name} to S3 bucket {bucket_name}")
-                
+
                 # Verify upload by checking if the file exists in S3
                 try:
                     response = s3.head_object(Bucket=bucket_name, Key=object_name)
                     logger.info(f"Verified file exists in S3: {object_name}, Size: {response['ContentLength']} bytes")
                 except Exception as e:
                     logger.error(f"Failed to verify file in S3 after upload: {e}")
-                
+
             except Exception as e:
                 logger.error(f"Error uploading to S3: {str(e)}")
                 import traceback

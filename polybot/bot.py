@@ -23,9 +23,6 @@ class Bot:
         self.token = token
         # Track active conversations to prevent default handler from responding
         self.active_conversations = set()
-        # Keep track of recent message IDs to prevent double processing
-        self.recent_command_ids = set()
-        self.max_recent_commands = 100  # Maximum number of message IDs to keep track of
 
         # Set up event handlers
         @self.client.event
@@ -37,23 +34,10 @@ class Bot:
             # Avoid responding to own messages
             if message.author == self.client.user:
                 return
-                
-            # Limit the size of recent_command_ids to prevent memory issues
-            if len(self.recent_command_ids) > self.max_recent_commands:
-                # Clear the set when it gets too large - IDs from old messages are unlikely to be reused
-                self.recent_command_ids.clear()
-                
-            # Process commands if message starts with the command prefix
-            if message.content.startswith('!'):
-                # Add this message ID to the recent commands set to prevent double processing
-                self.recent_command_ids.add(message.id)
-                await self.client.process_commands(message)
-                return  # Don't continue to message handler after processing a command
-                
-            # Only handle non-command messages with the default handler
-            # when not in an active conversation
-            if message.author.id not in self.active_conversations:
-                # Call the appropriate handle_message method
+            # Process commands
+            await self.client.process_commands(message)
+            # Default message handler - only if not in an active conversation
+            if not message.content.startswith('!') and message.author.id not in self.active_conversations:
                 await self.handle_message(message)
 
     async def start(self):
@@ -87,15 +71,15 @@ class Bot:
         if not self.is_current_msg_photo(message):
             raise RuntimeError(f'Message content of type photo expected')
         attachment = message.attachments[0]
-        
+
         # Use a consistent absolute path for the photos directory
         # Get the project root directory
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         folder_name = os.path.join(project_root, 'photos')
-        
+
         if not os.path.exists(folder_name):
             os.makedirs(folder_name)
-        
+
         file_path = f"{folder_name}/{attachment.filename}"
         await attachment.save(file_path)
         return file_path
@@ -383,7 +367,7 @@ class ImageProcessingBot(Bot):
         self.ollama_model = os.environ.get('OLLAMA_MODEL', 'gemma3:1b')
         logger.info(f"Ollama service URL set to: {self.ollama_url}")
         logger.info(f"Ollama model set to: {self.ollama_model}")
-        
+
         # Register commands
         @self.client.command(name='blur')
         async def blur(ctx, blur_level: int = 16):
@@ -515,7 +499,7 @@ class ImageProcessingBot(Bot):
                 img.segment()
 
             logger.info(f"Filter {operation} applied successfully")
-            
+
             # Save the processed image
             logger.info("Saving processed image and uploading to S3...")
             new_path = img.save_img()
@@ -879,7 +863,7 @@ Description: This upbeat track perfectly captures the happy mood with its catchy
                     spotify_search = f"{title} {artist}".replace(' ', '%20')
                     spotify_app_link = f"spotify:search:{spotify_search}"
                     spotify_web_link = f"https://open.spotify.com/search/{spotify_search}/tracks"
-                    
+
                     formatted_output += f"💬 {description}\n\n"
 
             return formatted_output
