@@ -28,6 +28,13 @@ if [ ! -d "$VENV_PATH" ]; then
     $VENV_PATH/bin/pip install python-dotenv fastapi uvicorn
 fi
 
+# Check if DISCORD_TOKEN environment variable is set
+if [ -n "$DISCORD_TOKEN" ]; then
+    echo "Using Discord token from environment variable..."
+    # Replace placeholder in service file
+    sed -i "s/placeholder_token_replace_this/$DISCORD_TOKEN/g" $SERVICE_NAME
+fi
+
 # Copy the service file
 echo "Installing service file..."
 sudo cp $SERVICE_NAME $SERVICE_PATH
@@ -43,9 +50,9 @@ sudo systemctl restart $SERVICE_NAME
 echo "Checking service status..."
 if ! systemctl is-active --quiet $SERVICE_NAME; then
     echo "❌ $SERVICE_NAME failed to start. Checking logs..."
-  sudo systemctl status $SERVICE_NAME --no-pager
+    sudo systemctl status $SERVICE_NAME --no-pager
     echo "Full logs available with: sudo journalctl -u $SERVICE_NAME"
-  exit 1
+    exit 1
 fi
 
 echo "✅ $SERVICE_NAME deployed and running successfully."

@@ -5,17 +5,17 @@ Wants=network-online.target
 StartLimitIntervalSec=0
 
 [Service]
-Type=oneshot
-RemainAfterExit=yes
+Type=simple
 User=ubuntu
 WorkingDirectory=/home/ubuntu/MyPolyBot
 ExecStart=/home/ubuntu/MyPolyBot/.venv/bin/python /home/ubuntu/MyPolyBot/polybot/app.py
-Restart=no
+Restart=on-failure
+RestartSec=10
 Environment=PYTHONUNBUFFERED=1
 # Make sure this .env file exists with a valid Discord token
 EnvironmentFile=/home/ubuntu/MyPolyBot/.env
 # Discord token must be set for the bot to work properly
-Environment=DISCORD_BOT_TOKEN=your_actual_discord_token_here
+Environment=DISCORD_BOT_TOKEN=placeholder_token_replace_this
 Environment=YOLO_URL=http://10.0.1.90:8081/predict
 Environment=OLLAMA_URL=http://10.0.0.136:11434/api/chat
 Environment=OLLAMA_MODEL=gemma3:1b
