@@ -16,7 +16,7 @@ sudo mkdir -p $(dirname $SERVICE_PATH)
 
 # Install system dependencies
 echo "Installing system dependencies..."
-sudo apt-get update
+    sudo apt-get update
 sudo apt-get install -y python3-venv python3-dev build-essential libssl-dev libffi-dev
 
 # Install python3-venv if not already installed
@@ -33,7 +33,7 @@ fi
 
 # Create a Python virtual environment if it doesn't exist
 if [ ! -d "$VENV_PATH" ]; then
-  echo "Creating virtual environment..."
+    echo "Creating virtual environment..."
   python3 -m venv "$VENV_PATH"
   
   # Verify the virtual environment was created properly
@@ -148,12 +148,12 @@ sudo systemctl enable $SERVICE_NAME
 # Check if the service is active
 if ! systemctl is-active --quiet $SERVICE_NAME; then
   echo "❌ Service failed to start"
-  sudo systemctl status $SERVICE_NAME --no-pager
+    sudo systemctl status $SERVICE_NAME --no-pager
   
   echo "Checking detailed logs for errors..."
   sudo journalctl -u $SERVICE_NAME -n 50 --no-pager
   
-  exit 1
+    exit 1
 else
   echo "✅ PolyBot service is running successfully."
 fi
