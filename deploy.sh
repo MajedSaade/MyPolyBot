@@ -46,6 +46,17 @@ if [ ! -f "$ENV_FILE" ] || ! grep -q "DISCORD_BOT_TOKEN=" "$ENV_FILE"; then
     echo "Discord token added to .env file."
 fi
 
+# Check and kill any processes using port 8443
+echo "Checking for processes using port 8443..."
+PORT_PID=$(sudo lsof -ti:8443)
+if [ ! -z "$PORT_PID" ]; then
+    echo "Killing process $PORT_PID using port 8443..."
+    sudo kill -9 $PORT_PID
+    echo "Process killed successfully."
+else
+    echo "No processes found using port 8443."
+fi
+
 # Copy the service file
 echo "Installing service file..."
 sudo cp $APP_DIR/$SERVICE_NAME $SERVICE_PATH

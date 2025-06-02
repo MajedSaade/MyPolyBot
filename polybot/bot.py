@@ -8,7 +8,7 @@ import random
 import re
 import requests
 from pathlib import Path
-from polybot.img_proc import Img
+from img_proc import Img
 import json
 import asyncio
 
