@@ -89,10 +89,10 @@ OLLAMA_MODEL=gemma3:1b
 STATUS_SERVER_PORT=8443
 
 # AWS S3 Configuration for Image Upload
-AWS_ACCESS_KEY_ID=your_aws_access_key_here
-AWS_SECRET_ACCESS_KEY=your_aws_secret_key_here
-AWS_REGION=us-east-1
-AWS_S3_BUCKET=your-s3-bucket-name
+AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-your_aws_access_key_here}
+AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-your_aws_secret_key_here}
+AWS_REGION=${AWS_REGION:-us-west-2}
+AWS_DEV_S3_BUCKET=${AWS_DEV_S3_BUCKET:-majed-dev-bucket}
 EOL
 
 # Display warning if token not provided
