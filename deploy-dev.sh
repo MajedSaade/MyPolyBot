@@ -37,7 +37,19 @@ fi
 # Install dependencies
 echo "Installing dependencies..."
 "$VENV_PATH/bin/pip" install --upgrade pip
-"$VENV_PATH/bin/pip" install -r "$APP_DIR/polybot/requirements.txt"
+
+# Install critical dependencies first
+echo "Installing critical dependencies..."
+"$VENV_PATH/bin/pip" install python-dotenv fastapi uvicorn loguru discord.py
+
+# Install all requirements from requirements.txt
+echo "Installing all requirements..."
+if ! "$VENV_PATH/bin/pip" install -r "$APP_DIR/polybot/requirements.txt"; then
+    echo "❌ Failed to install requirements"
+    exit 1
+fi
+
+echo "✅ All dependencies installed successfully"
 
 # Create .env file
 echo "Setting up environment configuration..."
