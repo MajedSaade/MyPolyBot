@@ -68,15 +68,6 @@ pip install -r "$APP_DIR/polybot/requirements.txt"
 # Set up environment variables
 echo "Setting up environment variables..."
 
-# Check for AWS credentials in standard locations
-if [ -z "$AWS_ACCESS_KEY_ID" ] && [ -f ~/.aws/credentials ]; then
-  echo "Found local AWS credentials file, checking if it can be used..."
-  if grep -q "\[default\]" ~/.aws/credentials; then
-    echo "Using AWS credentials from local credentials file"
-    # We don't extract them here, just noting that they exist
-  fi
-fi
-
 # Always create the .env file from scratch with proper values
 echo "Creating .env configuration file..."
 cat > "$APP_DIR/.env" << EOL
@@ -90,9 +81,7 @@ OLLAMA_URL=http://10.0.0.136:11434/api/chat
 OLLAMA_MODEL=gemma3:1b
 STATUS_SERVER_PORT=8443
 
-# AWS S3 Configuration for Image Uploads
-AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
-AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+# AWS S3 Configuration for Image Uploads (using IAM role authentication)
 AWS_REGION=${AWS_REGION:-us-east-1}
 AWS_DEV_S3_BUCKET=${AWS_DEV_S3_BUCKET:-}
 EOL
@@ -103,20 +92,34 @@ if [ -z "$DISCORD_DEV_BOT_TOKEN" ]; then
   echo "The bot will not work until you edit .env with a valid token and restart the service."
 fi
 
-# Display warning if AWS credentials not provided
-if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ] || [ -z "$AWS_DEV_S3_BUCKET" ]; then
-  echo "⚠️ WARNING: AWS credentials or S3 bucket not fully configured."
-  echo "S3 file uploads will be disabled until you configure AWS credentials."
-  echo "Run this command with AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AWS_DEV_S3_BUCKET environment variables set."
+# Display warning if S3 bucket not configured
+if [ -z "$AWS_DEV_S3_BUCKET" ]; then
+  echo "⚠️ WARNING: AWS S3 bucket not configured."
+  echo "S3 file uploads will be disabled until you configure AWS_DEV_S3_BUCKET environment variable."
+  echo "Make sure your EC2 instance has an IAM role with S3 permissions attached."
 fi
 
 # Display current environment settings
 echo "Current environment variables:"
 echo "DISCORD_DEV_BOT_TOKEN: $(if grep -q "DISCORD_DEV_BOT_TOKEN=" "$APP_DIR/.env" && [ "$(grep "DISCORD_DEV_BOT_TOKEN=" "$APP_DIR/.env" | cut -d= -f2)" != "your_discord_token_here" ]; then echo "is set"; else echo "not set"; fi)"
-echo "AWS_ACCESS_KEY_ID: $(if grep -q "AWS_ACCESS_KEY_ID=" "$APP_DIR/.env" && [ "$(grep "AWS_ACCESS_KEY_ID=" "$APP_DIR/.env" | cut -d= -f2)" != "" ]; then echo "is set"; else echo "not set"; fi)"
+echo "AWS_REGION: $(grep "AWS_REGION=" "$APP_DIR/.env" | cut -d= -f2)"
 echo "AWS_DEV_S3_BUCKET: $(if grep -q "AWS_DEV_S3_BUCKET=" "$APP_DIR/.env" && [ "$(grep "AWS_DEV_S3_BUCKET=" "$APP_DIR/.env" | cut -d= -f2)" != "" ]; then echo "is set"; else echo "not set"; fi)"
 echo "YOLO_URL: $(grep "YOLO_URL=" "$APP_DIR/.env" | cut -d= -f2)"
 echo "OLLAMA_URL: $(grep "OLLAMA_URL=" "$APP_DIR/.env" | cut -d= -f2)"
+
+# Check if IAM role is attached to the instance
+echo "Checking IAM role configuration..."
+if curl -s -f --max-time 5 http://169.254.169.254/latest/meta-data/iam/security-credentials/ > /dev/null; then
+  ROLE_NAME=$(curl -s --max-time 5 http://169.254.169.254/latest/meta-data/iam/security-credentials/)
+  if [ -n "$ROLE_NAME" ]; then
+    echo "✅ IAM role attached to instance: $ROLE_NAME"
+    echo "S3 operations will use IAM role for authentication."
+  else
+    echo "⚠️ WARNING: No IAM role found attached to this instance."
+  fi
+else
+  echo "⚠️ WARNING: Could not check IAM role status. Instance might not have an IAM role attached."
+fi
 
 # Make sure permissions are correct for .env
 chmod 600 "$APP_DIR/.env"

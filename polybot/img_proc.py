@@ -22,43 +22,57 @@ class S3Manager:
     """Handles all S3 operations for image uploads"""
     
     def __init__(self):
-        self.aws_access_key = os.getenv('AWS_ACCESS_KEY_ID')
-        self.aws_secret_key = os.getenv('AWS_SECRET_ACCESS_KEY')
         self.aws_region = os.getenv('AWS_REGION', 'us-west-2')
         self.bucket_name = os.getenv('AWS_DEV_S3_BUCKET')  # Only use dev bucket
         self.s3_client = None
         
-        # Initialize S3 client if credentials are available
-        if self._has_credentials():
-            self._initialize_s3_client()
+        # Initialize S3 client - will automatically use IAM role or AWS credentials
+        self._initialize_s3_client()
     
-    def _has_credentials(self) -> bool:
-        """Check if all required AWS credentials are available"""
+    def _has_minimal_config(self) -> bool:
+        """Check if we have at least region and bucket configured"""
         return all([
-            self.aws_access_key,
-            self.aws_secret_key,
             self.aws_region,
             self.bucket_name
         ])
     
     def _initialize_s3_client(self) -> bool:
-        """Initialize the S3 client with credentials"""
+        """Initialize the S3 client - automatically uses IAM role or AWS credentials"""
         try:
-            self.s3_client = boto3.client(
-                's3',
-                aws_access_key_id=self.aws_access_key,
-                aws_secret_access_key=self.aws_secret_key,
-                region_name=self.aws_region
-            )
-            logger.info(f"S3 client initialized for region: {self.aws_region}")
+            if not self._has_minimal_config():
+                logger.error("Missing required AWS configuration (region or bucket)")
+                return False
+            
+            # Create S3 client - boto3 will automatically use:
+            # 1. IAM role (if attached to EC2)
+            # 2. ~/.aws/credentials 
+            # 3. Environment variables
+            self.s3_client = boto3.client('s3', region_name=self.aws_region)
+            
+            # Test S3 access by checking if bucket exists
+            self.s3_client.head_bucket(Bucket=self.bucket_name)
+            logger.success(f"S3 client initialized successfully! Using region: {self.aws_region}, bucket: {self.bucket_name}")
             return True
+            
+        except ClientError as e:
+            error_code = e.response['Error']['Code']
+            if error_code == '403':
+                logger.error(f"Access denied to S3 bucket '{self.bucket_name}'. Check IAM permissions.")
+            elif error_code == '404':
+                logger.error(f"S3 bucket '{self.bucket_name}' not found.")
+            else:
+                logger.error(f"S3 client initialization failed: {error_code}")
+            return False
+        except NoCredentialsError:
+            logger.error("No AWS credentials found. Please attach IAM role to EC2 instance or configure AWS credentials.")
+            return False
         except Exception as e:
             logger.error(f"Failed to initialize S3 client: {e}")
             return False
     
     def upload_file(self, local_path: Path, s3_key: Optional[str] = None) -> bool:
         """Upload a file to S3"""
-        if not self._has_credentials():
+        if not self._has_minimal_config():
             logger.warning("AWS credentials not available. Skipping S3 upload.")
             self._log_missing_credentials()
             return False
@@ -138,17 +152,15 @@ class S3Manager:
     
     def _log_missing_credentials(self):
         """Log which AWS credentials are missing"""
-        missing = []
-        if not self.aws_access_key:
-            missing.append("AWS_ACCESS_KEY_ID")
-        if not self.aws_secret_key:
-            missing.append("AWS_SECRET_ACCESS_KEY")
-        if not self.aws_region:
-            missing.append("AWS_REGION")
-        if not self.bucket_name:
-            missing.append("AWS_DEV_S3_BUCKET")
-        
-        logger.warning(f"Missing AWS environment variables: {', '.join(missing)}")
+        if not self._has_minimal_config():
+            missing = []
+            if not self.aws_region:
+                missing.append("AWS_REGION")
+            if not self.bucket_name:
+                missing.append("AWS_DEV_S3_BUCKET")
+            logger.warning(f"Missing required AWS environment variables: {', '.join(missing)}")
+        else:
+            logger.warning("AWS credentials not found. Please attach IAM role to EC2 instance or configure AWS credentials.")
 
 
 class Img:

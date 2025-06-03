@@ -19,11 +19,10 @@ STATUS_SERVER_PORT = int(os.environ.get('STATUS_SERVER_PORT', 8443))
 
 # Log AWS environment variables
 logger.info("AWS Environment Variables:")
-logger.info(f"AWS_ACCESS_KEY_ID: {'Set' if os.environ.get('AWS_ACCESS_KEY_ID') else 'Not set'}")
-logger.info(f"AWS_SECRET_ACCESS_KEY: {'Set' if os.environ.get('AWS_SECRET_ACCESS_KEY') else 'Not set'}")
 logger.info(f"AWS_REGION: {os.environ.get('AWS_REGION')}")
 logger.info(f"AWS_DEV_S3_BUCKET: {os.environ.get('AWS_DEV_S3_BUCKET')}")
 logger.info(f"AWS_S3_BUCKET: {os.environ.get('AWS_S3_BUCKET')}")
+logger.info("AWS Authentication: Using IAM role (credentials managed automatically)")
 
 # Create FastAPI app for health checks
 app = FastAPI()

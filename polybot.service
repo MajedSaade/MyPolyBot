@@ -19,9 +19,7 @@ EnvironmentFile=/home/ubuntu/MyPolyBot/.env
 #Environment=OLLAMA_URL=http://10.0.0.136:11434/api/chat
 #Environment=OLLAMA_MODEL=gemma3:1b
 #Environment=STATUS_SERVER_PORT=8443
-# AWS Environment variables for S3 uploads
-#Environment=AWS_ACCESS_KEY_ID=your_access_key_here
-#Environment=AWS_SECRET_ACCESS_KEY=your_secret_key_here
+# AWS Environment variables for S3 uploads (using IAM role for authentication)
 #Environment=AWS_REGION=your_region_here
 #Environment=AWS_DEV_S3_BUCKET=your_bucket_name_here
 

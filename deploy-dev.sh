@@ -88,9 +88,7 @@ OLLAMA_URL=http://10.0.0.136:11434/api/chat
 OLLAMA_MODEL=gemma3:1b
 STATUS_SERVER_PORT=8443
 
-# AWS S3 Configuration for Image Upload
-AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-your_aws_access_key_here}
-AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-your_aws_secret_key_here}
+# AWS S3 Configuration for Image Upload (using IAM role authentication)
 AWS_REGION=${AWS_REGION:-us-west-2}
 AWS_DEV_S3_BUCKET=${AWS_DEV_S3_BUCKET:-majed-dev-bucket}
 EOL
@@ -101,11 +99,34 @@ if [ -z "$DISCORD_BOT_TOKEN" ]; then
   echo "The bot will not work until you edit .env with a valid token and restart the service."
 fi
 
+# Display warning if S3 bucket not configured
+if [ -z "$AWS_DEV_S3_BUCKET" ]; then
+  echo "⚠️ WARNING: AWS S3 bucket not configured."
+  echo "S3 file uploads will be disabled until you configure AWS_DEV_S3_BUCKET environment variable."
+  echo "Make sure your EC2 instance has an IAM role with S3 permissions attached."
+fi
+
 # Display current environment settings
 echo "Current environment variables:"
 echo "DISCORD_DEV_BOT_TOKEN: $(if grep -q "DISCORD_DEV_BOT_TOKEN=" "$APP_DIR/.env" && [ "$(grep "DISCORD_DEV_BOT_TOKEN=" "$APP_DIR/.env" | cut -d= -f2)" != "your_discord_token_here" ]; then echo "is set"; else echo "not set"; fi)"
+echo "AWS_REGION: $(grep "AWS_REGION=" "$APP_DIR/.env" | cut -d= -f2)"
+echo "AWS_DEV_S3_BUCKET: $(grep "AWS_DEV_S3_BUCKET=" "$APP_DIR/.env" | cut -d= -f2)"
 echo "YOLO_URL: $(grep "YOLO_URL=" "$APP_DIR/.env" | cut -d= -f2)"
 echo "OLLAMA_URL: $(grep "OLLAMA_URL=" "$APP_DIR/.env" | cut -d= -f2)"
+
+# Check if IAM role is attached to the instance
+echo "Checking IAM role configuration..."
+if curl -s -f --max-time 5 http://169.254.169.254/latest/meta-data/iam/security-credentials/ > /dev/null; then
+  ROLE_NAME=$(curl -s --max-time 5 http://169.254.169.254/latest/meta-data/iam/security-credentials/)
+  if [ -n "$ROLE_NAME" ]; then
+    echo "✅ IAM role attached to instance: $ROLE_NAME"
+    echo "S3 operations will use IAM role for authentication."
+  else
+    echo "⚠️ WARNING: No IAM role found attached to this instance."
+  fi
+else
+  echo "⚠️ WARNING: Could not check IAM role status. Instance might not have an IAM role attached."
+fi
 
 # Make sure permissions are correct for .env
 chmod 600 "$APP_DIR/.env"
