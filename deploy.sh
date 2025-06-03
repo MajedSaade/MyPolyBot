@@ -25,7 +25,7 @@ if [ ! -d "$VENV_PATH" ]; then
     python3 -m venv $VENV_PATH
     $VENV_PATH/bin/pip install --upgrade pip
     $VENV_PATH/bin/pip install -r $APP_DIR/polybot/requirements.txt
-    $VENV_PATH/bin/pip install python-dotenv fastapi uvicorn
+    $VENV_PATH/bin/pip install python-dotenv fastapi uvicorn loguru
 fi
 
 # Create .env file if it doesn't exist or update it
@@ -48,12 +48,20 @@ EOL
 # Set proper permissions for .env file
 chmod 600 $APP_DIR/.env
 
-# Check if DISCORD_TOKEN environment variable is set
+# Copy and update the service file
+echo "Installing service file..."
+cp $SERVICE_NAME $SERVICE_NAME.tmp
+
+# Check if DISCORD_TOKEN environment variable is set and replace it in the service file
 if [ -n "$DISCORD_TOKEN" ]; then
     echo "Using Discord token from environment variable..."
     # Replace placeholder in service file
-    sed -i "s/placeholder_token_replace_this/$DISCORD_TOKEN/g" $SERVICE_NAME
+    sed -i "s/DISCORD_BOT_TOKEN=placeholder_token_replace_this/DISCORD_BOT_TOKEN=$DISCORD_TOKEN/g" $SERVICE_NAME.tmp
 fi
+
+sudo cp $SERVICE_NAME.tmp $SERVICE_PATH
+sudo chmod 644 $SERVICE_PATH
+rm $SERVICE_NAME.tmp
 
 # Check if IAM role is attached to the instance
 echo "Checking IAM role configuration..."
@@ -69,22 +77,22 @@ else
   echo "⚠️ WARNING: Could not check IAM role status. Instance might not have an IAM role attached."
 fi
 
-# Copy the service file
-echo "Installing service file..."
-sudo cp $SERVICE_NAME $SERVICE_PATH
-sudo chmod 644 $SERVICE_PATH
-
 # Reload systemd and restart/enable the bot service
 echo "Configuring systemd service..."
 sudo systemctl daemon-reload
 sudo systemctl enable $SERVICE_NAME
 sudo systemctl restart $SERVICE_NAME
 
+# Wait a moment for the service to start
+sleep 3
+
 # Check if the service is running
 echo "Checking service status..."
 if ! systemctl is-active --quiet $SERVICE_NAME; then
     echo "❌ $SERVICE_NAME failed to start. Checking logs..."
     sudo systemctl status $SERVICE_NAME --no-pager
+    echo "Recent logs:"
+    sudo journalctl -u $SERVICE_NAME --no-pager -n 20
     echo "Full logs available with: sudo journalctl -u $SERVICE_NAME"
     exit 1
 fi

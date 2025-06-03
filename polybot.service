@@ -12,6 +12,7 @@ ExecStart=/home/ubuntu/MyPolyBot/.venv/bin/python /home/ubuntu/MyPolyBot/polybot
 Restart=on-failure
 RestartSec=10
 Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=/home/ubuntu/MyPolyBot
 # Make sure this .env file exists with a valid Discord token
 EnvironmentFile=/home/ubuntu/MyPolyBot/.env
 # Discord token must be set for the bot to work properly
