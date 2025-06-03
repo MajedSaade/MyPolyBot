@@ -15,10 +15,23 @@ echo "Installing system dependencies..."
 sudo apt-get update
 sudo apt-get install -y python3-venv python3-pip
 
+# Remove existing virtual environment if it exists but is broken
+if [ -d "$VENV_PATH" ] && [ ! -f "$VENV_PATH/bin/pip" ]; then
+    echo "Removing broken virtual environment..."
+    rm -rf "$VENV_PATH"
+fi
+
 # Setup virtual environment
 if [ ! -d "$VENV_PATH" ]; then
     echo "Creating virtual environment..."
     python3 -m venv "$VENV_PATH"
+    
+    # Verify the virtual environment was created properly
+    if [ ! -f "$VENV_PATH/bin/pip" ]; then
+        echo "❌ Failed to create virtual environment properly"
+        exit 1
+    fi
+    echo "✅ Virtual environment created successfully"
 fi
 
 # Install dependencies
