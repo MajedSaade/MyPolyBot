@@ -3,31 +3,172 @@ import matplotlib
 from matplotlib.image import imread, imsave
 import numpy as np
 import random
+import boto3
+from botocore.exceptions import ClientError, NoCredentialsError
+import os
+from loguru import logger
+from datetime import datetime
+from typing import Optional, Tuple
+
 
 def rgb2gray(rgb):
+    """Convert RGB image to grayscale"""
     r, g, b = rgb[:, :, 0], rgb[:, :, 1], rgb[:, :, 2]
     gray = 0.2989 * r + 0.5870 * g + 0.1140 * b
     return gray
 
+
+class S3Manager:
+    """Handles all S3 operations for image uploads using IAM role authentication"""
+    
+    def __init__(self):
+        self.aws_region = os.getenv('AWS_REGION', 'us-west-2')
+        self.bucket_name = os.getenv('AWS_DEV_S3_BUCKET')
+        self.s3_client = None
+        
+        # Initialize S3 client - will automatically use IAM role
+        self._initialize_s3_client()
+    
+    def _has_minimal_config(self) -> bool:
+        """Check if we have at least region and bucket configured"""
+        return all([
+            self.aws_region,
+            self.bucket_name
+        ])
+    
+    def _initialize_s3_client(self) -> bool:
+        """Initialize the S3 client using IAM role authentication"""
+        try:
+            if not self._has_minimal_config():
+                logger.error("Missing required AWS configuration (region or bucket)")
+                return False
+            
+            # Create S3 client - boto3 will automatically use IAM role when available
+            logger.info("Initializing S3 client using IAM role authentication...")
+            self.s3_client = boto3.client('s3', region_name=self.aws_region)
+            
+            # Test S3 access by checking if bucket exists
+            self.s3_client.head_bucket(Bucket=self.bucket_name)
+            logger.success(f"✅ S3 client initialized successfully using IAM role! Region: {self.aws_region}, Bucket: {self.bucket_name}")
+            return True
+            
+        except ClientError as e:
+            error_code = e.response['Error']['Code']
+            if error_code == '403':
+                logger.error(f"❌ Access denied to S3 bucket '{self.bucket_name}'. Check IAM role permissions.")
+            elif error_code == '404':
+                logger.error(f"❌ S3 bucket '{self.bucket_name}' not found.")
+            else:
+                logger.error(f"❌ S3 client initialization failed: {error_code}")
+            return False
+        except NoCredentialsError:
+            logger.error("❌ No AWS credentials found. Please ensure IAM role is attached to EC2 instance.")
+            return False
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize S3 client: {e}")
+            return False
+    
+    def upload_file(self, local_path: Path, s3_key: Optional[str] = None) -> bool:
+        """Upload a file to S3 using IAM role authentication"""
+        if not self._has_minimal_config():
+            logger.warning("⚠️ AWS configuration not available. Skipping S3 upload.")
+            return False
+        
+        if not self.s3_client:
+            if not self._initialize_s3_client():
+                return False
+        
+        try:
+            # Generate S3 key if not provided
+            if s3_key is None:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                s3_key = f"processed_images/{timestamp}_{local_path.name}"
+            
+            # Check file exists
+            if not local_path.exists():
+                logger.error(f"❌ File does not exist: {local_path}")
+                return False
+            
+            # Upload the file
+            logger.info(f"📤 Uploading {local_path.name} ({local_path.stat().st_size} bytes) to S3...")
+            
+            self.s3_client.upload_file(
+                str(local_path), 
+                self.bucket_name, 
+                s3_key
+            )
+            
+            logger.success(f"✅ Successfully uploaded to S3: s3://{self.bucket_name}/{s3_key}")
+            return True
+                
+        except NoCredentialsError:
+            logger.error("❌ AWS credentials not found - ensure IAM role is attached")
+            return False
+        except ClientError as e:
+            logger.error(f"❌ AWS S3 error during upload: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"❌ Unexpected error uploading to S3: {e}")
+            return False
+
+
 class Img:
+    """Image processing class with S3 integration using IAM role authentication"""
 
     def __init__(self, path):
         """
         Constructor that loads and normalizes image to [0, 255] grayscale
         """
         self.path = Path(path)
-        gray = rgb2gray(imread(path))
+        self.s3_manager = S3Manager()
+        
+        # Load and convert image to grayscale
+        try:
+            gray = rgb2gray(imread(path))
+            
+            # Normalize to [0, 255] for test compatibility
+            if gray.max() <= 1.0:
+                gray = gray * 255.0
+            
+            self.data = gray.tolist()
+            logger.info(f"📷 Image loaded: {self.path.name} ({len(self.data)}x{len(self.data[0]) if self.data else 0})")
+            
+        except Exception as e:
+            logger.error(f"❌ Error loading image {path}: {e}")
+            raise
 
-        # Normalize to [0, 255] for test compatibility
-        if gray.max() <= 1.0:
-            gray = gray * 255.0
-
-        self.data = gray.tolist()
-
-    def save_img(self):
-        new_path = self.path.with_name(self.path.stem + '_filtered' + self.path.suffix)
-        imsave(new_path, np.array(self.data) / 255.0, cmap='gray')  # Normalize for saving
-        return new_path
+    def save_img(self, auto_upload_s3: bool = True, custom_suffix: str = "_filtered") -> Path:
+        """
+        Save the processed image locally and optionally upload to S3
+        
+        Args:
+            auto_upload_s3: Whether to automatically upload to S3
+            custom_suffix: Custom suffix for the saved file
+        
+        Returns:
+            Path to the saved file
+        """
+        # Generate new file path
+        new_path = self.path.with_name(self.path.stem + custom_suffix + self.path.suffix)
+        
+        try:
+            # Save image locally
+            imsave(new_path, np.array(self.data) / 255.0, cmap='gray')
+            logger.info(f"💾 Image saved locally: {new_path}")
+            
+            # Upload to S3 if requested
+            if auto_upload_s3:
+                upload_success = self.s3_manager.upload_file(new_path)
+                if upload_success:
+                    logger.info("☁️ Image successfully uploaded to S3")
+                else:
+                    logger.warning("⚠️ S3 upload failed, but local save was successful")
+            
+            return new_path
+            
+        except Exception as e:
+            logger.error(f"❌ Error saving image: {e}")
+            raise
 
     def blur(self, blur_level=16):
         height = len(self.data)
