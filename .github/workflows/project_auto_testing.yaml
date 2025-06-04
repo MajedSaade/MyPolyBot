@@ -1,46 +1,50 @@
-name: Project auto-testing
-
+name: Deploy Polybot
+#majedtorunCheck
 on:
   push:
     branches:
       - main
-      - feature/**
+  workflow_dispatch:
 
-permissions: {}
+env:
+  REPO_URL: https://github.com/MajedSaade/MyPolyBot.git
+  REPO_NAME: MyPolyBot
 
 jobs:
-  TestImgProcessingChatbotApp:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Your Code
-        uses: actions/checkout@v2
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Install Dependencies
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_HOST: ${{ secrets.POLYBOT_EC2_HOST }}
+          EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
         run: |
-          python -m venv venv
-          source venv/bin/activate
-          pip install --upgrade pip
-          pip install matplotlib
-          pip install -r polybot/requirements.txt
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/private_key
+          chmod 600 ~/.ssh/private_key
+          cat > ~/.ssh/config << EOF
+          Host poly
+            HostName $EC2_HOST
+            User $EC2_USERNAME
+            IdentityFile ~/.ssh/private_key
+            StrictHostKeyChecking no
+          EOF
 
-      - name: Test Filters
+      - name: Clone or Pull Code on EC2
         run: |
-          source venv/bin/activate
-          echo -e "\n✅ Testing concat()"
-          python -m polybot.test.test_concat
+          ssh poly "if [ -d ~/${REPO_NAME} ]; then
+                     cd ~/${REPO_NAME} && git pull;
+                   else
+                     git clone ${REPO_URL} ~/${REPO_NAME};
+                   fi"
 
-          echo -e "\n✅ Testing rotate()"
-          python -m polybot.test.test_rotate
-
-          echo -e "\n✅ Testing salt_n_pepper()"
-          python -m polybot.test.test_salt_n_pepper
-
-          echo -e "\n✅ Testing segment()"
-          python -m polybot.test.test_segment
-
-      - name: Test Discord Bot
+      - name: Run Deployment Script on EC2
+        env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN_PROD }}
         run: |
-          source venv/bin/activate
-          echo -e "\n✅ Testing Discord Bot"
-          python -m polybot.test.test_telegram_bot
+          ssh poly "cd ~/${REPO_NAME} && DISCORD_BOT_TOKEN='$DISCORD_BOT_TOKEN' bash deploy.sh"
