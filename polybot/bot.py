@@ -71,9 +71,15 @@ class Bot:
         if not self.is_current_msg_photo(message):
             raise RuntimeError(f'Message content of type photo expected')
         attachment = message.attachments[0]
-        folder_name = 'photos'
+
+        # Use a consistent absolute path for the photos directory
+        # Get the project root directory
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        folder_name = os.path.join(project_root, 'photos')
+
         if not os.path.exists(folder_name):
             os.makedirs(folder_name)
+
         file_path = f"{folder_name}/{attachment.filename}"
         await attachment.save(file_path)
         return file_path
@@ -466,30 +472,46 @@ class ImageProcessingBot(Bot):
 
         # Download the image
         try:
+            logger.info(f"Processing image with operation: {operation}")
             file_path = await self.download_user_photo(ctx.message)
+            logger.info(f"Downloaded image to: {file_path}")
 
             # Process image
             img = Img(file_path)
+            logger.info(f"Created Img object from: {file_path}")
 
             # Apply the requested operation
             if operation == 'blur':
-                img.blur(blur_level=kwargs.get('blur_level', 16))
+                blur_level = kwargs.get('blur_level', 16)
+                logger.info(f"Applying blur with level: {blur_level}")
+                img.blur(blur_level=blur_level)
             elif operation == 'contour':
+                logger.info("Applying contour filter")
                 img.contour()
             elif operation == 'rotate':
+                logger.info("Applying rotation")
                 img.rotate()
             elif operation == 'salt_n_pepper':
+                logger.info("Applying salt and pepper noise")
                 img.salt_n_pepper()
             elif operation == 'segment':
+                logger.info("Applying segmentation")
                 img.segment()
 
+            logger.info(f"Filter {operation} applied successfully")
+
             # Save the processed image
+            logger.info("Saving processed image and uploading to S3...")
             new_path = img.save_img()
+            logger.info(f"Image saved to: {new_path}")
 
             # Send the processed image
             await ctx.send(f"Processed image with {operation}:", file=discord.File(new_path))
+            logger.info(f"Sent processed image to Discord")
         except Exception as e:
             logger.error(f"Error processing image: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
             await ctx.send(f"Error processing image: {e}")
 
     async def detect_objects(self, ctx):
@@ -841,7 +863,7 @@ Description: This upbeat track perfectly captures the happy mood with its catchy
                     spotify_search = f"{title} {artist}".replace(' ', '%20')
                     spotify_app_link = f"spotify:search:{spotify_search}"
                     spotify_web_link = f"https://open.spotify.com/search/{spotify_search}/tracks"
-                    
+
                     formatted_output += f"💬 {description}\n\n"
 
             return formatted_output

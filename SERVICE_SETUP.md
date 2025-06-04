@@ -10,44 +10,58 @@ This guide explains how to set up and manage the PolyBot Discord service on your
    cd /home/ubuntu/MyPolyBot
    ```
 
-2. Configure your environment variables by creating a `.env` file:
-   ```bash
-   cat > .env << EOF
-   DISCORD_BOT_TOKEN=your_discord_token_here
-   YOLO_URL=http://10.0.1.90:8081/predict
-   OLLAMA_URL=http://10.0.0.136:11434/api/chat
-   OLLAMA_MODEL=gemma3:1b
-   STATUS_SERVER_PORT=8443
-   EOF
-   ```
-
-3. Run the deploy script:
+2. Run the deployment script:
    ```bash
    chmod +x deploy.sh
-   ./deploy.sh
+   DISCORD_BOT_TOKEN=your_actual_token ./deploy.sh
    ```
+
+   Or for development:
+   ```bash
+   chmod +x deploy-dev.sh
+   DISCORD_BOT_TOKEN=your_dev_token ./deploy-dev.sh
+   ```
+
+## Environment Configuration
+
+The deployment script automatically creates a `.env` file with the following structure:
+```bash
+DISCORD_BOT_TOKEN=your_discord_token_here
+DISCORD_DEV_BOT_TOKEN=your_dev_token_here  # For dev environment
+YOLO_URL=http://10.0.1.90:8081/predict
+OLLAMA_URL=http://10.0.0.136:11434/api/chat
+OLLAMA_MODEL=gemma3:1b
+STATUS_SERVER_PORT=8443
+AWS_REGION=us-west-2
+AWS_DEV_S3_BUCKET=majed-dev-bucket
+```
 
 ## Managing the Service
 
 ### Checking Service Status
 ```bash
-sudo systemctl status polybot.service
+sudo systemctl status polybot.service          # Production
+sudo systemctl status polybot-dev.service      # Development
 ```
 
 ### Viewing Logs
 ```bash
-sudo journalctl -u polybot.service -f
+sudo journalctl -u polybot.service -f          # Production
+sudo journalctl -u polybot-dev.service -f      # Development
 ```
 
 ### Starting/Stopping the Service
 ```bash
-sudo systemctl start polybot.service
+sudo systemctl start polybot.service           # Production
 sudo systemctl stop polybot.service
+sudo systemctl start polybot-dev.service       # Development
+sudo systemctl stop polybot-dev.service
 ```
 
 ### Restarting the Service
 ```bash
-sudo systemctl restart polybot.service
+sudo systemctl restart polybot.service         # Production
+sudo systemctl restart polybot-dev.service     # Development
 ```
 
 ## Troubleshooting
@@ -58,20 +72,19 @@ sudo systemctl restart polybot.service
    sudo journalctl -u polybot.service -e
    ```
 
-2. Verify your environment variables in `/etc/systemd/system/polybot.service`:
+2. Verify your environment variables in `.env`:
    ```bash
-   sudo nano /etc/systemd/system/polybot.service
+   cat .env
    ```
    
-3. Ensure your Python virtual environment has all required dependencies:
+3. Ensure your virtual environment has all required dependencies:
    ```bash
    source .venv/bin/activate
    pip install -r polybot/requirements.txt
-   pip install python-dotenv fastapi uvicorn
    ```
 
 ### Updating the Service After Code Changes
 ```bash
 git pull
-./deploy.sh
+./deploy.sh  # or ./deploy-dev.sh for development
 ``` 

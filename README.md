@@ -350,4 +350,47 @@ Time to submit your solution for testing.
 [python_project_webhook1]: https://exit-zero-academy.github.io/DevOpsTheHardWayAssets/img/python_project_webhook1.png
 [python_project_webhook2]: https://exit-zero-academy.github.io/DevOpsTheHardWayAssets/img/python_project_webhook2.png
 
+## AWS S3 Integration
+
+The bot now includes AWS S3 integration for storing and managing image uploads. This allows for better persistence of images and enables integration with other AWS services.
+
+### AWS Configuration
+
+1. **Create an AWS IAM User**:
+   - Sign in to the AWS Management Console and navigate to the IAM service
+   - Create a new user with programmatic access
+   - Attach the `AmazonS3FullAccess` policy to the user
+   - Save the Access Key ID and Secret Access Key provided
+
+2. **Create an S3 Bucket**:
+   - Navigate to the S3 service in the AWS Management Console
+   - Create a new bucket with a unique name
+   - Configure the bucket settings as needed (recommended: enable versioning)
+   
+3. **Configure AWS Credentials**:
+   - Add your AWS credentials to the `.env` file:
+     ```
+     AWS_ACCESS_KEY_ID=your_access_key_here
+     AWS_SECRET_ACCESS_KEY=your_secret_key_here
+     AWS_REGION=your_aws_region (e.g., us-east-1)
+     AWS_DEV_S3_BUCKET=your-dev-bucket-name
+     AWS_S3_BUCKET=your-production-bucket-name
+     ```
+
+4. **Install AWS CLI**:
+   - Run `./setup_env.sh` which will install the AWS CLI if it's not already installed
+   - Alternatively, follow the [AWS CLI installation instructions](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
+
+5. **Verify AWS Configuration**:
+   - Run `aws s3 ls` to list your buckets and verify credentials are working
+   - Run `aws s3 ls s3://your-bucket-name` to check access to your specific bucket
+
+### S3 Folder Structure
+
+The bot organizes uploads in S3 using the following structure:
+- `<bucket_name>/<chat_id>/original/<image_name>` - Original uploaded images
+- `<bucket_name>/<chat_id>/predicted/<image_name>` - Images processed by the bot
+
+This organization helps maintain clean separation between different chats and image types.
+
 
