@@ -8,21 +8,16 @@ StartLimitIntervalSec=0
 Type=simple
 User=ubuntu
 WorkingDirectory=/home/ubuntu/MyPolyBot
-ExecStart=/home/ubuntu/MyPolyBot/.venv/bin/python /home/ubuntu/MyPolyBot/polybot/app.py
-Restart=on-failure
+ExecStart=/home/ubuntu/MyPolyBot/.venv/bin/python -m polybot.app
+Restart=always
 RestartSec=10
 Environment=PYTHONUNBUFFERED=1
-Environment=PYTHONPATH=/home/ubuntu/MyPolyBot
-# Make sure this .env file exists with a valid Discord token
-EnvironmentFile=/home/ubuntu/MyPolyBot/.env
-# Discord token must be set for the bot to work properly
-Environment=DISCORD_BOT_TOKEN=placeholder_token_replace_this
-Environment=YOLO_URL=http://10.0.1.90:8081/predict
-Environment=OLLAMA_URL=http://10.0.0.136:11434/api/chat
-Environment=OLLAMA_MODEL=gemma3:1b
-Environment=STATUS_SERVER_PORT=8443
-StandardOutput=journal
-StandardError=journal
+# Uncomment and set these as needed:
+#Environment=DISCORD_BOT_TOKEN=your_token_here
+#Environment=YOLO_URL=http://10.0.1.90:8081/predict
+#Environment=OLLAMA_URL=http://10.0.1.33:11434/api/chat
+#Environment=OLLAMA_MODEL=gemma3:1b
+#Environment=STATUS_SERVER_PORT=8443
 
 [Install]
-WantedBy=multi-user.target 
+WantedBy=multi-user.target

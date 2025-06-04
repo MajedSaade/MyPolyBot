@@ -25,57 +25,13 @@ if [ ! -d "$VENV_PATH" ]; then
     python3 -m venv $VENV_PATH
     $VENV_PATH/bin/pip install --upgrade pip
     $VENV_PATH/bin/pip install -r $APP_DIR/polybot/requirements.txt
-    $VENV_PATH/bin/pip install python-dotenv fastapi uvicorn loguru
+    $VENV_PATH/bin/pip install python-dotenv fastapi uvicorn
 fi
 
-# Create .env file if it doesn't exist or update it
-echo "Setting up environment configuration..."
-cat > $APP_DIR/.env << EOL
-# Discord Bot Configuration
-DISCORD_BOT_TOKEN=${DISCORD_TOKEN:-your_discord_token_here}
-
-# Services Configuration  
-YOLO_URL=http://10.0.1.90:8081/predict
-OLLAMA_URL=http://10.0.0.136:11434/api/chat
-OLLAMA_MODEL=gemma3:1b
-STATUS_SERVER_PORT=8443
-
-# AWS S3 Configuration (using IAM role for authentication)
-AWS_REGION=us-west-2
-AWS_DEV_S3_BUCKET=majed-dev-bucket
-EOL
-
-# Set proper permissions for .env file
-chmod 600 $APP_DIR/.env
-
-# Copy and update the service file
+# Copy the service file
 echo "Installing service file..."
-cp $SERVICE_NAME $SERVICE_NAME.tmp
-
-# Check if DISCORD_TOKEN environment variable is set and replace it in the service file
-if [ -n "$DISCORD_TOKEN" ]; then
-    echo "Using Discord token from environment variable..."
-    # Replace placeholder in service file
-    sed -i "s/DISCORD_BOT_TOKEN=placeholder_token_replace_this/DISCORD_BOT_TOKEN=$DISCORD_TOKEN/g" $SERVICE_NAME.tmp
-fi
-
-sudo cp $SERVICE_NAME.tmp $SERVICE_PATH
+sudo cp $SERVICE_NAME $SERVICE_PATH
 sudo chmod 644 $SERVICE_PATH
-rm $SERVICE_NAME.tmp
-
-# Check if IAM role is attached to the instance
-echo "Checking IAM role configuration..."
-if curl -s -f --max-time 5 http://169.254.169.254/latest/meta-data/iam/security-credentials/ > /dev/null; then
-  ROLE_NAME=$(curl -s --max-time 5 http://169.254.169.254/latest/meta-data/iam/security-credentials/)
-  if [ -n "$ROLE_NAME" ]; then
-    echo "✅ IAM role attached to instance: $ROLE_NAME"
-    echo "S3 operations will use IAM role for authentication."
-  else
-    echo "⚠️ WARNING: No IAM role found attached to this instance."
-  fi
-else
-  echo "⚠️ WARNING: Could not check IAM role status. Instance might not have an IAM role attached."
-fi
 
 # Reload systemd and restart/enable the bot service
 echo "Configuring systemd service..."
@@ -83,18 +39,13 @@ sudo systemctl daemon-reload
 sudo systemctl enable $SERVICE_NAME
 sudo systemctl restart $SERVICE_NAME
 
-# Wait a moment for the service to start
-sleep 3
-
 # Check if the service is running
 echo "Checking service status..."
 if ! systemctl is-active --quiet $SERVICE_NAME; then
     echo "❌ $SERVICE_NAME failed to start. Checking logs..."
-    sudo systemctl status $SERVICE_NAME --no-pager
-    echo "Recent logs:"
-    sudo journalctl -u $SERVICE_NAME --no-pager -n 20
+  sudo systemctl status $SERVICE_NAME --no-pager
     echo "Full logs available with: sudo journalctl -u $SERVICE_NAME"
-    exit 1
+  exit 1
 fi
 
 echo "✅ $SERVICE_NAME deployed and running successfully."

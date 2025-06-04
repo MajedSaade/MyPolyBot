@@ -1,5 +1,5 @@
 name: Deploy Polybot
-#majedcheck
+#majed
 on:
   push:
     branches:
