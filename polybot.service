@@ -1,5 +1,5 @@
 [Unit]
-Description=Polybot Service - Discord Bot
+Description=Discord Polybot Service
 After=network.target
 Wants=network-online.target
 StartLimitIntervalSec=0
@@ -8,13 +8,17 @@ StartLimitIntervalSec=0
 Type=simple
 User=ubuntu
 WorkingDirectory=/home/ubuntu/MyPolyBot
-EnvironmentFile=-/home/ubuntu/MyPolyBot/.env
 ExecStart=/home/ubuntu/MyPolyBot/.venv/bin/python -m polybot.app
 Restart=always
 RestartSec=10
 Environment=PYTHONUNBUFFERED=1
-KillMode=process
-TimeoutStopSec=30
+EnvironmentFile=/home/ubuntu/MyPolyBot/.env
+# Uncomment and set these as needed:
+#Environment=DISCORD_BOT_TOKEN=your_token_here
+#Environment=YOLO_URL=http://10.0.1.90:8081/predict
+#Environment=OLLAMA_URL=http://10.0.0.136:11434/api/chat
+#Environment=OLLAMA_MODEL=gemma3:1b
+#Environment=STATUS_SERVER_PORT=8443
 
 [Install]
 WantedBy=multi-user.target
