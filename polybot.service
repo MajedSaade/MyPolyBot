@@ -1,5 +1,5 @@
 [Unit]
-Description=Discord Polybot Service
+Description=Polybot Service - Discord Bot
 After=network.target
 Wants=network-online.target
 StartLimitIntervalSec=0
@@ -8,11 +8,13 @@ StartLimitIntervalSec=0
 Type=simple
 User=ubuntu
 WorkingDirectory=/home/ubuntu/MyPolyBot
-EnvironmentFile=/home/ubuntu/MyPolyBot/.env
+EnvironmentFile=-/home/ubuntu/MyPolyBot/.env
 ExecStart=/home/ubuntu/MyPolyBot/.venv/bin/python -m polybot.app
 Restart=always
 RestartSec=10
 Environment=PYTHONUNBUFFERED=1
+KillMode=process
+TimeoutStopSec=30
 
 [Install]
 WantedBy=multi-user.target
