@@ -7,6 +7,8 @@ from loguru import logger
 from fastapi import FastAPI
 import uvicorn
 
+#majed
+
 # Load environment variables from .env file
 load_dotenv()
 
