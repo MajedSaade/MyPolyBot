@@ -13,15 +13,14 @@ VENV_PATH="$APP_DIR/.venv"
 # Install system dependencies
 echo "Installing system dependencies..."
 sudo apt-get update
-sudo apt-get install -y python3-venv python3-pip
+sudo apt-get install -y python3-venv python3-pip wget
 
-# Install and configure OpenTelemetry Collector
-echo "Installing OpenTelemetry Collector..."
-wget https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v0.118.0/otelcol-contrib_0.118.0_linux_amd64.deb
-sudo dpkg -i otelcol-contrib_0.118.0_linux_amd64.deb
+# Install OpenTelemetry Collector (core version)
+wget https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v0.127.0/otelcol_0.127.0_linux_amd64.deb
+sudo dpkg -i otelcol_0.127.0_linux_amd64.deb
 
-echo "Configuring OpenTelemetry Collector..."
-sudo tee /etc/otelcol-contrib/config.yaml > /dev/null << EOL
+# Configure the Collector
+sudo tee /etc/otelcol/config.yaml > /dev/null << EOL
 receivers:
   hostmetrics:
     collection_interval: 15s
@@ -45,8 +44,8 @@ service:
       exporters: [prometheus]
 EOL
 
-echo "Restarting OpenTelemetry Collector service..."
-sudo systemctl restart otelcol-contrib
+# Restart the Collector service
+sudo systemctl restart otelcol
 
 # Remove existing virtual environment if broken
 if [ -d "$VENV_PATH" ] && [ ! -f "$VENV_PATH/bin/pip" ]; then
