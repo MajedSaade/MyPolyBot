@@ -15,18 +15,50 @@ echo "Installing system dependencies..."
 sudo apt-get update
 sudo apt-get install -y python3-venv python3-pip
 
-# Remove existing virtual environment if it exists but is broken
+# Install and configure OpenTelemetry Collector
+echo "Installing OpenTelemetry Collector..."
+wget https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v0.118.0/otelcol-contrib_0.118.0_linux_amd64.deb
+sudo dpkg -i otelcol-contrib_0.118.0_linux_amd64.deb
+
+echo "Configuring OpenTelemetry Collector..."
+sudo tee /etc/otelcol-contrib/config.yaml > /dev/null << EOL
+receivers:
+  hostmetrics:
+    collection_interval: 15s
+    scrapers:
+      cpu:
+      memory:
+      disk:
+      filesystem:
+      load:
+      network:
+      processes:
+
+exporters:
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+
+service:
+  pipelines:
+    metrics:
+      receivers: [hostmetrics]
+      exporters: [prometheus]
+EOL
+
+echo "Restarting OpenTelemetry Collector service..."
+sudo systemctl restart otelcol-contrib
+
+# Remove existing virtual environment if broken
 if [ -d "$VENV_PATH" ] && [ ! -f "$VENV_PATH/bin/pip" ]; then
     echo "Removing broken virtual environment..."
     rm -rf "$VENV_PATH"
 fi
 
-# Setup virtual environment
+# Create virtual environment if not existing
 if [ ! -d "$VENV_PATH" ]; then
     echo "Creating virtual environment..."
     python3 -m venv "$VENV_PATH"
-    
-    # Verify the virtual environment was created properly
+
     if [ ! -f "$VENV_PATH/bin/pip" ]; then
         echo "❌ Failed to create virtual environment properly"
         exit 1
@@ -37,41 +69,23 @@ fi
 # Install dependencies
 echo "Installing dependencies..."
 "$VENV_PATH/bin/pip" install --upgrade pip
-
-# Install critical dependencies first
-echo "Installing critical dependencies..."
 "$VENV_PATH/bin/pip" install python-dotenv fastapi uvicorn loguru discord.py
+"$VENV_PATH/bin/pip" install -r "$APP_DIR/polybot/requirements.txt"
 
-# Install all requirements from requirements.txt
-echo "Installing all requirements..."
-if ! "$VENV_PATH/bin/pip" install -r "$APP_DIR/polybot/requirements.txt"; then
-    echo "❌ Failed to install requirements"
-    exit 1
-fi
-
-echo "✅ All dependencies installed successfully"
-
-# Create .env file
-echo "Setting up environment configuration..."
+# Set environment variables
 cat > "$APP_DIR/.env" << EOL
-# Discord Bot Configuration
 DISCORD_DEV_BOT_TOKEN=${DISCORD_BOT_TOKEN:-your_discord_token_here}
-
-# Services Configuration
 YOLO_URL=http://10.0.1.90:8081/predict
 OLLAMA_URL=http://10.0.0.136:11434/api/chat
 OLLAMA_MODEL=gemma3:1b
 STATUS_SERVER_PORT=8443
-
-# AWS S3 Configuration
 AWS_REGION=us-west-2
 AWS_DEV_S3_BUCKET=majed-dev-bucket
 EOL
 
 chmod 600 "$APP_DIR/.env"
 
-# Create systemd service file
-echo "Setting up systemd service..."
+# Create and enable systemd service
 sudo tee $SERVICE_PATH > /dev/null << EOL
 [Unit]
 Description=Discord Polybot Service (Dev)
@@ -92,14 +106,10 @@ EnvironmentFile=$APP_DIR/.env
 WantedBy=multi-user.target
 EOL
 
-# Start the service
-echo "Starting service..."
 sudo systemctl daemon-reload
 sudo systemctl enable $SERVICE_NAME
 sudo systemctl restart $SERVICE_NAME
 
-# Check status
-echo "Checking service status..."
 if systemctl is-active --quiet $SERVICE_NAME; then
     echo "✅ PolyBot (Dev) deployed and running successfully!"
 else
