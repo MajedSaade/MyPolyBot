@@ -1,7 +1,7 @@
 #!/bin/bash
 
 set -e  # Exit on any error
-
+#work
 echo "Starting deployment of PolyBot..."
 
 # Configuration
