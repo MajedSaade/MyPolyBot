@@ -74,7 +74,7 @@ echo "Installing dependencies..."
 # Set environment variables
 cat > "$APP_DIR/.env" << EOL
 DISCORD_DEV_BOT_TOKEN=${DISCORD_BOT_TOKEN:-your_discord_token_here}
-YOLO_URL=http://10.0.0.66:8080/predict
+YOLO_URL=http://10.0.0.66:8081/predict
 OLLAMA_URL=http://10.0.0.136:11434/api/chat
 OLLAMA_MODEL=gemma3:1b
 STATUS_SERVER_PORT=8443
