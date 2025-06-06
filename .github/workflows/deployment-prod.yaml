@@ -3,7 +3,7 @@ name: Deploy Polybot
 on:
   push:
     branches:
-      #- main
+      - main
   workflow_dispatch:
 
 env:
