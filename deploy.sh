@@ -16,10 +16,12 @@ sudo apt-get update
 sudo apt-get install -y python3-venv python3-pip wget
 
 # Install OpenTelemetry Collector (core version)
+echo "Installing OpenTelemetry Collector..."
 wget https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v0.127.0/otelcol_0.127.0_linux_amd64.deb
 sudo dpkg -i otelcol_0.127.0_linux_amd64.deb
 
 # Configure the Collector
+echo "Configuring OpenTelemetry Collector..."
 sudo tee /etc/otelcol/config.yaml > /dev/null << EOL
 receivers:
   hostmetrics:
@@ -44,7 +46,27 @@ service:
       exporters: [prometheus]
 EOL
 
-# Restart the Collector service
+# Create otelcol systemd service
+echo "Creating otelcol systemd service..."
+sudo tee /etc/systemd/system/otelcol.service > /dev/null << EOL
+[Unit]
+Description=OpenTelemetry Collector
+After=network-online.target
+
+[Service]
+ExecStart=/usr/bin/otelcol --config=/etc/otelcol/config.yaml
+Restart=always
+RestartSec=5
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+EOL
+
+# Enable and restart otelcol service
+echo "Enabling and restarting otelcol service..."
+sudo systemctl daemon-reload
+sudo systemctl enable otelcol
 sudo systemctl restart otelcol
 
 # Remove existing virtual environment if broken
@@ -72,6 +94,7 @@ echo "Installing dependencies..."
 "$VENV_PATH/bin/pip" install -r "$APP_DIR/polybot/requirements.txt"
 
 # Set environment variables
+echo "Creating .env configuration file..."
 cat > "$APP_DIR/.env" << EOL
 DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-your_discord_token_here}
 YOLO_URL=http://10.0.1.90:8081/predict
@@ -84,7 +107,8 @@ EOL
 
 chmod 600 "$APP_DIR/.env"
 
-# Create and enable systemd service
+# Create and enable systemd service for PolyBot
+echo "Setting up systemd service for PolyBot..."
 sudo tee $SERVICE_PATH > /dev/null << EOL
 [Unit]
 Description=Discord Polybot Service
@@ -109,6 +133,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable $SERVICE_NAME
 sudo systemctl restart $SERVICE_NAME
 
+# Check status of PolyBot service
 if systemctl is-active --quiet $SERVICE_NAME; then
     echo "✅ PolyBot deployed and running successfully!"
 else
