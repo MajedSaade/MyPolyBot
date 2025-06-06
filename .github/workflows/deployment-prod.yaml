@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-      - feature/monitoring_dev_Setup
+      - feature/monitoring_dev_setup
   workflow_dispatch:
 
 env:
