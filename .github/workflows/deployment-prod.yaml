@@ -1,9 +1,10 @@
 name: Deploy Polybot
-#majedtorunCheck1
+#majedtorunCheck
 on:
   push:
     branches:
       - main
+      - feature/monitoring_dev_Setup
   workflow_dispatch:
 
 env:
