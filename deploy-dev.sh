@@ -10,101 +10,164 @@ SERVICE_PATH=/etc/systemd/system/$SERVICE_NAME
 APP_DIR=$(pwd)
 VENV_PATH="$APP_DIR/.venv"
 
+# Optional: clean pip and apt cache to save disk space
+echo "Cleaning pip and apt cache..."
+pip cache purge || true
+sudo apt-get clean
+
 # Install system dependencies
 echo "Installing system dependencies..."
 sudo apt-get update
-sudo apt-get install -y python3-venv python3-pip
+sudo apt-get install -y python3-venv python3-pip wget
 
-# Remove existing virtual environment if it exists but is broken
-if [ -d "$VENV_PATH" ] && [ ! -f "$VENV_PATH/bin/pip" ]; then
-    echo "Removing broken virtual environment..."
-    rm -rf "$VENV_PATH"
+# --- Clean up old otelcol .deb files to save disk space ---
+echo "Cleaning up old otelcol .deb files..."
+rm -f ~/otelcol_0.127.0_linux_amd64.deb*
+
+# --- Install OpenTelemetry Collector ---
+echo "Installing OpenTelemetry Collector..."
+wget https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v0.127.0/otelcol_0.127.0_linux_amd64.deb
+sudo dpkg -i otelcol_0.127.0_linux_amd64.deb
+
+# --- Configure OpenTelemetry Collector ---
+echo "Configuring OpenTelemetry Collector..."
+sudo tee /etc/otelcol/config.yaml > /dev/null << EOL
+receivers:
+  hostmetrics:
+    collection_interval: 15s
+    scrapers:
+      cpu:
+      memory:
+      disk:
+      filesystem:
+      load:
+      network:
+      processes:
+
+exporters:
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+
+service:
+  pipelines:
+    metrics:
+      receivers: [hostmetrics]
+      exporters: [prometheus]
+EOL
+
+# Enable and restart otelcol
+echo "Enabling and restarting otelcol service..."
+sudo systemctl daemon-reload
+sudo systemctl enable otelcol
+sudo systemctl restart otelcol
+
+# Setup Python virtual environment
+echo "Setting up Python virtual environment..."
+if [ -d "$VENV_PATH" ] && [ ! -f "$VENV_PATH/bin/activate" ]; then
+  echo "Found incomplete virtual environment, removing it..."
+  rm -rf "$VENV_PATH"
 fi
 
-# Setup virtual environment
 if [ ! -d "$VENV_PATH" ]; then
-    echo "Creating virtual environment..."
-    python3 -m venv "$VENV_PATH"
-    
-    # Verify the virtual environment was created properly
-    if [ ! -f "$VENV_PATH/bin/pip" ]; then
-        echo "❌ Failed to create virtual environment properly"
-        exit 1
-    fi
-    echo "✅ Virtual environment created successfully"
+  echo "Creating virtual environment..."
+  python3 -m venv "$VENV_PATH"
+
+  if [ ! -f "$VENV_PATH/bin/activate" ]; then
+    echo "❌ Failed to create virtual environment properly."
+    exit 1
+  fi
+fi
+
+echo "Activating virtual environment..."
+source "$VENV_PATH/bin/activate"
+
+if [ -z "$VIRTUAL_ENV" ]; then
+  echo "❌ Failed to activate virtual environment."
+  exit 1
 fi
 
 # Install dependencies
 echo "Installing dependencies..."
-"$VENV_PATH/bin/pip" install --upgrade pip
+pip install --upgrade pip
 
-# Install critical dependencies first
-echo "Installing critical dependencies..."
-"$VENV_PATH/bin/pip" install python-dotenv fastapi uvicorn loguru discord.py
+echo "Installing critical packages..."
+pip install python-dotenv fastapi uvicorn loguru discord.py
 
-# Install all requirements from requirements.txt
 echo "Installing all requirements..."
-if ! "$VENV_PATH/bin/pip" install -r "$APP_DIR/polybot/requirements.txt"; then
-    echo "❌ Failed to install requirements"
-    exit 1
-fi
+pip install -r "$APP_DIR/polybot/requirements.txt"
 
-echo "✅ All dependencies installed successfully"
-
-# Create .env file
-echo "Setting up environment configuration..."
+# Set environment variables
+echo "Setting up environment variables..."
 cat > "$APP_DIR/.env" << EOL
-# Discord Bot Configuration
 DISCORD_DEV_BOT_TOKEN=${DISCORD_BOT_TOKEN:-your_discord_token_here}
-
-# Services Configuration
-YOLO_URL=http://10.0.1.90:8081/predict
+YOLO_URL=http://10.0.0.66:8081/predict
 OLLAMA_URL=http://10.0.0.136:11434/api/chat
 OLLAMA_MODEL=gemma3:1b
 STATUS_SERVER_PORT=8443
-
-# AWS S3 Configuration
 AWS_REGION=us-west-2
 AWS_DEV_S3_BUCKET=majed-dev-bucket
 EOL
 
 chmod 600 "$APP_DIR/.env"
 
-# Create systemd service file
-echo "Setting up systemd service..."
+# Display current environment settings
+echo "Current environment variables:"
+echo "DISCORD_DEV_BOT_TOKEN: $(if grep -q "DISCORD_DEV_BOT_TOKEN=" "$APP_DIR/.env" && [ "$(grep "DISCORD_DEV_BOT_TOKEN=" "$APP_DIR/.env" | cut -d= -f2)" != "your_discord_token_here" ]; then echo "is set"; else echo "not set"; fi)"
+echo "YOLO_URL: $(grep "YOLO_URL=" "$APP_DIR/.env" | cut -d= -f2)"
+echo "OLLAMA_URL: $(grep "OLLAMA_URL=" "$APP_DIR/.env" | cut -d= -f2)"
+
+# Create systemd service
+echo "Preparing systemd service file..."
 sudo tee $SERVICE_PATH > /dev/null << EOL
 [Unit]
-Description=Discord Polybot Service (Dev)
+Description=Discord PolyBot Service (Dev)
 After=network.target
+Wants=network-online.target
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
 User=$(whoami)
 WorkingDirectory=$APP_DIR
-ExecStart=$VENV_PATH/bin/python $APP_DIR/polybot/app.py
-Restart=on-failure
+ExecStart=$VENV_PATH/bin/python -m polybot.app
+Restart=always
 RestartSec=10
 Environment=PYTHONUNBUFFERED=1
-Environment=PYTHONPATH=$APP_DIR
 EnvironmentFile=$APP_DIR/.env
 
 [Install]
 WantedBy=multi-user.target
 EOL
 
-# Start the service
-echo "Starting service..."
-sudo systemctl daemon-reload
-sudo systemctl enable $SERVICE_NAME
-sudo systemctl restart $SERVICE_NAME
-
-# Check status
-echo "Checking service status..."
-if systemctl is-active --quiet $SERVICE_NAME; then
-    echo "✅ PolyBot (Dev) deployed and running successfully!"
-else
-    echo "❌ Service failed to start. Check logs with: sudo journalctl -u $SERVICE_NAME"
+# Test the application initialization for 5 seconds max
+echo "Testing the app startup (will timeout after 5 seconds)..."
+timeout 5s python -m polybot.app --test-run || {
+  if [ $? -eq 124 ]; then
+    echo "✅ Test run timeout reached - this is expected, the app started successfully."
+  else
+    echo "❌ The app failed to start when run directly."
     exit 1
+  fi
+}
+
+# Deactivate the virtual environment
+deactivate
+
+# Reload daemon and restart the service
+echo "Restarting PolyBot (Dev) service..."
+sudo systemctl daemon-reload
+sudo systemctl restart $SERVICE_NAME
+sudo systemctl enable $SERVICE_NAME
+
+# Check if the service is active
+if ! systemctl is-active --quiet $SERVICE_NAME; then
+  echo "❌ Service failed to start"
+  sudo systemctl status $SERVICE_NAME --no-pager
+  sudo journalctl -u $SERVICE_NAME -n 50 --no-pager
+  exit 1
+else
+  echo "✅ PolyBot (Dev) service is running successfully."
+  echo "View logs with: sudo journalctl -u $SERVICE_NAME -f"
 fi
 
-echo "View logs with: sudo journalctl -u $SERVICE_NAME -f"
+echo "Deployment completed successfully!"
