@@ -6,6 +6,7 @@ on:
     branches:
       - dev
       - feature/dev_setup
+      - feature/monitoring_dev_setup
   workflow_dispatch:
 
 env:
