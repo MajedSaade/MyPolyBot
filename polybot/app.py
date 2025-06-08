@@ -6,6 +6,10 @@ from polybot.bot import ImageProcessingBot
 from loguru import logger
 from fastapi import FastAPI
 import uvicorn
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from prometheus_fastapi_instrumentator import Instrumentator
+from opentelemetry import metrics
+
 
 # Load environment variables from .env file
 load_dotenv()
@@ -19,6 +23,20 @@ STATUS_SERVER_PORT = int(os.environ.get('STATUS_SERVER_PORT', 8443))
 
 # Create FastAPI app for health checks
 app = FastAPI()
+
+# Register Prometheus instrumentation
+Instrumentator().instrument(app).expose(app)
+
+
+# Create custom meter
+meter = metrics.get_meter(__name__)
+
+# Example custom counter → you can use this in your bot logic
+polybot_requests_counter = meter.create_counter("polybot_requests_total")
+
+
+
+
 
 "For MyPolyBot check if good , old V"
 
