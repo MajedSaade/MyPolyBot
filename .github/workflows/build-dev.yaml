@@ -1,12 +1,12 @@
 # .github/workflows/build-dev.yaml
 name: Polybot Build Dev
-#check
+
 on:
   push:
     branches:
       - dev
       - feature/dev_setup
-      - feature/containerization
+      - feature/monitoring_dev_setup
   workflow_dispatch:
 
 jobs:
@@ -27,7 +27,8 @@ jobs:
           docker login -u "$DOCKERHUB_USERNAME" -p "$DOCKERHUB_TOKEN"
 
           img_name="$DOCKERHUB_USERNAME/polybot-dev:${{ github.run_number }}"
-          echo "image=$img_name" >> $GITHUB_OUTPUT
+          echo "image=$img_name" >> $GITHUB_ENV
+          echo "::set-output name=image::$img_name"
 
           docker build --build-arg ENVIRONMENT=development -t $img_name .
           docker push $img_name
@@ -36,4 +37,4 @@ jobs:
     needs: Build
     uses: ./.github/workflows/deploy-dev.yaml
     with:
-      image: ${{ jobs.Build.outputs.image }}
+      image: ${{ needs.Build.outputs.image }}
