@@ -1,8 +1,6 @@
 # .github/workflows/deploy-dev.yaml
 name: Polybot Deploy Dev
 
-#check
-
 on:
   workflow_call:
     inputs:
@@ -36,21 +34,24 @@ jobs:
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/private_key
           chmod 600 ~/.ssh/private_key
-          cat > ~/.ssh/config << EOF
-         Host polydev
-            HostName $EC2_HOST
-            User $EC2_USERNAME
-            IdentityFile ~/.ssh/private_key
-            StrictHostKeyChecking no
-          EOF
+
+          cat > ~/.ssh/config <<EOF
+Host polydev
+  HostName $EC2_HOST
+  User $EC2_USERNAME
+  IdentityFile ~/.ssh/private_key
+  StrictHostKeyChecking accept-new
+EOF
 
       - name: Deploy Docker Compose on Dev EC2
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
           DISCORD_DEV_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN_DEV }}
+          EC2_HOST: ${{ secrets.POLYBOT_EC2_HOST_DEV }}
+          EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
         run: |
-          ssh polydev << EOF
+          ssh polydev <<'EOF'
             cd ~/${REPO_NAME} || { echo "ERROR: Repo not found"; exit 1; }
 
             # Install Docker CE + Compose v2 if not installed
@@ -62,8 +63,8 @@ jobs:
                 sudo mkdir -p /etc/apt/keyrings
                 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
                 echo \
-                  "deb [arch=\$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
-                  \$(lsb_release -cs) stable" | \
+                  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+                  $(lsb_release -cs) stable" | \
                   sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
                 sudo apt-get update
                 sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
@@ -83,4 +84,4 @@ jobs:
             docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_TOKEN
             docker compose -f docker-compose.dev.yaml pull
             docker compose -f docker-compose.dev.yaml up -d --remove-orphans
-          EOF
+EOF
