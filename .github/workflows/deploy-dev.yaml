@@ -1,6 +1,8 @@
 # .github/workflows/deploy-dev.yaml
 name: Polybot Deploy Dev
 
+#check
+
 on:
   workflow_call:
     inputs:
@@ -28,20 +30,18 @@ jobs:
       - name: Configure SSH for Dev
         env:
           SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_HOST: ${{ secrets.POLYBOT_EC2_HOST_DEV }}
+          EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
         run: |
-          export EC2_HOST="${{ secrets.POLYBOT_EC2_HOST_DEV }}"
-          export EC2_USERNAME="${{ secrets.EC2_USERNAME }}"
-
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/private_key
           chmod 600 ~/.ssh/private_key
-          cat > ~/.ssh/config << EOF
-Host polydev
-  HostName "$EC2_HOST"
-  User "$EC2_USERNAME"
-  IdentityFile ~/.ssh/private_key
-  StrictHostKeyChecking no
-EOF
+          echo "Host polydev" > ~/.ssh/config
+          echo "  HostName $EC2_HOST" >> ~/.ssh/config
+          echo "  User $EC2_USERNAME" >> ~/.ssh/config
+          echo "  IdentityFile ~/.ssh/private_key" >> ~/.ssh/config
+          echo "  StrictHostKeyChecking no" >> ~/.ssh/config
+          chmod 600 ~/.ssh/config
 
       - name: Deploy Docker Compose on Dev EC2
         env:
@@ -49,9 +49,6 @@ EOF
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
           DISCORD_DEV_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN_DEV }}
         run: |
-          export EC2_HOST="${{ secrets.POLYBOT_EC2_HOST_DEV }}"
-          export EC2_USERNAME="${{ secrets.EC2_USERNAME }}"
-
           ssh polydev << EOF
             cd ~/${REPO_NAME} || { echo "ERROR: Repo not found"; exit 1; }
 
