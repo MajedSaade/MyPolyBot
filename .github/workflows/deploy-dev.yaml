@@ -36,12 +36,13 @@ jobs:
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/private_key
           chmod 600 ~/.ssh/private_key
-          echo "Host polydev" > ~/.ssh/config
-          echo "  HostName $EC2_HOST" >> ~/.ssh/config
-          echo "  User $EC2_USERNAME" >> ~/.ssh/config
-          echo "  IdentityFile ~/.ssh/private_key" >> ~/.ssh/config
-          echo "  StrictHostKeyChecking no" >> ~/.ssh/config
-          chmod 600 ~/.ssh/config
+          cat > ~/.ssh/config << EOF
+         Host polydev
+            HostName $EC2_HOST
+            User $EC2_USERNAME
+            IdentityFile ~/.ssh/private_key
+            StrictHostKeyChecking no
+          EOF
 
       - name: Deploy Docker Compose on Dev EC2
         env:
