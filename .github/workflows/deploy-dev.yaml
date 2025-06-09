@@ -36,12 +36,12 @@ jobs:
           chmod 600 ~/.ssh/private_key
 
           cat > ~/.ssh/config <<EOF
-Host polydev
-  HostName $EC2_HOST
-  User $EC2_USERNAME
-  IdentityFile ~/.ssh/private_key
-  StrictHostKeyChecking accept-new
-EOF
+          Host polydev
+          HostName $EC2_HOST
+          User $EC2_USERNAME
+          IdentityFile ~/.ssh/private_key
+          StrictHostKeyChecking accept-new
+         EOF
 
       - name: Deploy Docker Compose on Dev EC2
         env:
