@@ -7,6 +7,7 @@ on:
       - dev
       - feature/dev_setup
       - feature/monitoring_dev_setup
+      - feature/containerization
   workflow_dispatch:
 
 jobs:
