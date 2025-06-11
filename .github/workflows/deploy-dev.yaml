@@ -55,8 +55,12 @@ jobs:
           DISCORD_DEV_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN_DEV }}
           REPO_NAME: MyPolyBot
         run: |
-            ssh polydev "IMAGE_NAME=${{ inputs.image }} DISCORD_DEV_BOT_TOKEN='${{ secrets.DISCORD_BOT_TOKEN_DEV }}' bash -s" <<'EOF'
-            set -e  # Fail fast if any command fails         
+          export EC2_HOST="${{ secrets.POLYBOT_EC2_HOST_DEV }}"
+          export EC2_USERNAME="${{ secrets.EC2_USERNAME }}"
+          export REPO_NAME="MyPolyBot"
+          export IMAGE_NAME="${{ inputs.image }}"
+
+            ssh polydev "IMAGE_NAME=${{ inputs.image }} DISCORD_DEV_BOT_TOKEN='${{ secrets.DISCORD_BOT_TOKEN_DEV }}' bash -s" <<'EOF'  
           
             echo "Removing existing repo directory if it exists..."
             rm -rf ~/MyPolyBot
