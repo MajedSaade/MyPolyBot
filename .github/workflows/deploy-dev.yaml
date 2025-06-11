@@ -1,3 +1,4 @@
+# .github/workflows/deploy-dev.yaml
 name: Polybot Deploy Dev
 
 on:
@@ -6,52 +7,45 @@ on:
       image:
         required: true
         type: string
-        secrets:
-          DOCKERHUB_USERNAME:
-            required: true
-          DOCKERHUB_TOKEN:
-            required: true
-          EC2_SSH_KEY:
-            required: true
-          POLYBOT_EC2_HOST_DEV:
-            required: true
-          EC2_USERNAME:
-            required: true
-          DISCORD_BOT_TOKEN_DEV:
-            required: true
-  workflow_dispatch:
-    inputs:
-      image:
+    secrets:
+      DOCKERHUB_USERNAME:
         required: true
-        type: string
-
-env:
-  REPO_URL: https://github.com/MajedSaade/MyPolyBot.git
-  REPO_NAME: MyPolyBot
+      DOCKERHUB_TOKEN:
+        required: true
+      EC2_SSH_KEY:
+        required: true
+      POLYBOT_EC2_HOST_DEV:
+        required: true
+      EC2_USERNAME:
+        required: true
+      DISCORD_BOT_TOKEN_DEV:
+        required: true
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    env:
-      SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
-      EC2_HOST: ${{ secrets.POLYBOT_EC2_HOST_DEV }}
-      EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Configure SSH for Dev
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
         run: |
+          export EC2_HOST="${{ secrets.POLYBOT_EC2_HOST_DEV }}"
+          export EC2_USERNAME="${{ secrets.EC2_USERNAME }}"
+
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/private_key
           chmod 600 ~/.ssh/private_key
-          cat > ~/.ssh/config << EOF
+
+          cat <<EOF | envsubst > ~/.ssh/config
           Host polydev
-            HostName $EC2_HOST
-            User $EC2_USERNAME
-            IdentityFile ~/.ssh/private_key
-            StrictHostKeyChecking no
+          HostName \$EC2_HOST
+          User \$EC2_USERNAME
+          IdentityFile ~/.ssh/private_key
+          StrictHostKeyChecking no
           EOF
 
       - name: Deploy Docker Compose on Dev EC2
@@ -59,9 +53,10 @@ jobs:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
           DISCORD_DEV_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN_DEV }}
-          EC2_HOST: ${{ secrets.POLYBOT_EC2_HOST_DEV }}
-          EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
         run: |
+          export EC2_HOST="${{ secrets.POLYBOT_EC2_HOST_DEV }}"
+          export EC2_USERNAME="${{ secrets.EC2_USERNAME }}"
+
           ssh polydev <<'EOF'
             cd ~/${REPO_NAME} || { echo "ERROR: Repo not found"; exit 1; }
 
