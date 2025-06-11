@@ -39,3 +39,10 @@ jobs:
     uses: ./.github/workflows/deploy-dev.yaml
     with:
       image: ${{ needs.Build.outputs.image }}
+      secrets:
+        DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+        DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+        POLYBOT_EC2_HOST_DEV: ${{ secrets.POLYBOT_EC2_HOST_DEV }}
+        EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
+        DISCORD_BOT_TOKEN_DEV: ${{ secrets.DISCORD_BOT_TOKEN_DEV }}
