@@ -61,17 +61,17 @@ jobs:
           export IMAGE_NAME="${{ inputs.image }}"
 
           ssh polydev <<EOF
-            set -e  # Fail fast if any command fails         
-          
+            set -e  # Fail fast if any command fails       
+
             echo "Removing existing repo directory if it exists..."
             rm -rf ~/MyPolyBot
-          
+
             echo "Cloning MyPolyBot repo (branch feature/containerization)..."
             git clone --branch feature/containerization https://github.com/MajedSaade/MyPolyBot.git ~/MyPolyBot
 
             echo "Changing into repo directory..."
-            cd ~/MyPolyBot || { echo "ERROR: Repo not found after clone"; exit 1; }          
-          
+            cd ~/MyPolyBot || { echo "ERROR: Repo not found after clone"; exit 1; }       
+
             echo "Current directory:"
             pwd
             echo "Directory listing:"
@@ -95,18 +95,20 @@ jobs:
                 echo "Docker is already installed"
             fi
 
-            echo "Creating .env file with image: $IMAGE_NAME"
-            cat > .env <<EOL
-            IMG_NAME=$IMAGE_NAME
-            ENVIRONMENT=development
-            DISCORD_DEV_BOT_TOKEN=$DISCORD_DEV_BOT_TOKEN
-            YOLO_URL=http://10.0.1.90:8081/predict
-            OLLAMA_URL=http://10.0.0.136:11434/api/chat
-            STATUS_SERVER_PORT=8443
-            EOL
-  
-            echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
-          
+            echo "Creating .env file with image: \$IMAGE_NAME"
+            echo "IMG_NAME=\$IMAGE_NAME" > .env
+            echo "ENVIRONMENT=development" >> .env
+            echo "DISCORD_DEV_BOT_TOKEN=\$DISCORD_DEV_BOT_TOKEN" >> .env
+            echo "YOLO_URL=http://10.0.1.90:8081/predict" >> .env
+            echo "OLLAMA_URL=http://10.0.0.136:11434/api/chat" >> .env
+            echo "STATUS_SERVER_PORT=8443" >> .env
+
+            echo "Logging into Docker Hub..."
+            echo "\$DOCKERHUB_TOKEN" | docker login -u "\$DOCKERHUB_USERNAME" --password-stdin
+
+            echo "Pulling and starting Docker Compose..."
             docker compose -f docker-compose.dev.yaml pull
             docker compose -f docker-compose.dev.yaml up -d --remove-orphans
-            EOF
+
+            echo "Deployment completed successfully."
+          EOF
