@@ -32,20 +32,23 @@ jobs:
       - name: Configure SSH for Dev
         env:
           SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_HOST: ${{ secrets.POLYBOT_EC2_HOST_DEV }}
+          EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
         run: |
-          export EC2_HOST="${{ secrets.POLYBOT_EC2_HOST_DEV }}"
-          export EC2_USERNAME="${{ secrets.EC2_USERNAME }}"
-
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/private_key
           chmod 600 ~/.ssh/private_key
-
-          cat <<EOF | envsubst > ~/.ssh/config
+          
+          # Add EC2 host to known_hosts to avoid SSH verification prompt
+          ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts
+          
+          # Create SSH config
+          cat > ~/.ssh/config <<EOF
           Host polydev
-          HostName \$EC2_HOST
-          User \$EC2_USERNAME
-          IdentityFile ~/.ssh/private_key
-          StrictHostKeyChecking no
+            HostName $EC2_HOST
+            User $EC2_USERNAME
+            IdentityFile ~/.ssh/private_key
+            StrictHostKeyChecking no
           EOF
 
       - name: Deploy Docker Compose on Dev EC2
@@ -53,59 +56,133 @@ jobs:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
           DISCORD_DEV_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN_DEV }}
-          REPO_NAME: MyPolyBot
+          IMAGE_NAME: ${{ inputs.image }}
         run: |
-          export EC2_HOST="${{ secrets.POLYBOT_EC2_HOST_DEV }}"
-          export EC2_USERNAME="${{ secrets.EC2_USERNAME }}"
-          export REPO_NAME="MyPolyBot"
-          export IMAGE_NAME="${{ inputs.image }}"
-
-            ssh polydev "IMAGE_NAME=${{ inputs.image }} DISCORD_DEV_BOT_TOKEN='${{ secrets.DISCORD_BOT_TOKEN_DEV }}' bash -s" <<'EOF'  
+          # Create deployment script
+          cat > deploy_script.sh <<'DEPLOY_SCRIPT'
+          #!/bin/bash
+          set -e
           
-            echo "Removing existing repo directory if it exists..."
-            rm -rf ~/MyPolyBot
+          echo "=== Starting deployment ==="
+          echo "Image: $IMAGE_NAME"
+          echo "Discord Token: [REDACTED]"
           
-            echo "Cloning MyPolyBot repo (branch feature/containerization)..."
-            git clone --branch feature/containerization https://github.com/MajedSaade/MyPolyBot.git ~/MyPolyBot
-
-            echo "Changing into repo directory..."
-            cd ~/MyPolyBot || { echo "ERROR: Repo not found after clone"; exit 1; }          
+          # Remove existing repo directory if it exists
+          echo "Removing existing repo directory if it exists..."
+          rm -rf ~/MyPolyBot
           
-            echo "Current directory:"
-            pwd
-            echo "Directory listing:"
-            ls -l
-
-            # Install Docker CE + Compose v2 if not installed
-            if ! command -v docker &> /dev/null; then
-                echo "Installing Docker CE + Compose v2..."
-                sudo apt-get remove -y docker docker-engine docker.io containerd runc || true
-                sudo apt-get update
-                sudo apt-get install -y ca-certificates curl gnupg lsb-release
-                sudo mkdir -p /etc/apt/keyrings
-                curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-                echo \
-                  "deb [arch=\$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
-                  \$(lsb_release -cs) stable" | \
-                  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-                sudo apt-get update
-                sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-            else
-                echo "Docker is already installed"
-            fi
-
-            echo "Creating .env file with image: $IMAGE_NAME"
-            cat > .env <<EOL
-            IMG_NAME=$IMAGE_NAME
-            ENVIRONMENT=development
-            DISCORD_DEV_BOT_TOKEN=$DISCORD_DEV_BOT_TOKEN
-            YOLO_URL=http://10.0.1.90:8081/predict
-            OLLAMA_URL=http://10.0.0.136:11434/api/chat
-            STATUS_SERVER_PORT=8443
+          # Clone the repository
+          echo "Cloning MyPolyBot repo..."
+          git clone --branch feature/containerization https://github.com/MajedSaade/MyPolyBot.git ~/MyPolyBot
+          
+          # Change to repo directory
+          cd ~/MyPolyBot || { echo "ERROR: Failed to change to repo directory"; exit 1; }
+          
+          echo "Current directory: $(pwd)"
+          echo "Directory contents:"
+          ls -la
+          
+          # Install Docker if not present
+          if ! command -v docker &> /dev/null; then
+              echo "Installing Docker..."
+              # Remove old docker packages
+              sudo apt-get remove -y docker docker-engine docker.io containerd runc 2>/dev/null || true
+              
+              # Update package index
+              sudo apt-get update
+              
+              # Install prerequisites
+              sudo apt-get install -y \
+                  ca-certificates \
+                  curl \
+                  gnupg \
+                  lsb-release
+              
+              # Add Docker's official GPG key
+              sudo mkdir -p /etc/apt/keyrings
+              curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+              
+              # Set up repository
+              echo \
+                "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+                $(lsb_release -cs) stable" | \
+                sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+              
+              # Install Docker Engine
+              sudo apt-get update
+              sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+              
+              # Add current user to docker group
+              sudo usermod -aG docker $USER
+              
+              # Start and enable Docker
+              sudo systemctl start docker
+              sudo systemctl enable docker
+          else
+              echo "Docker is already installed"
+          fi
+          
+          # Verify Docker Compose is available
+          if ! docker compose version &> /dev/null; then
+              echo "ERROR: Docker Compose is not available"
+              exit 1
+          fi
+          
+          # Create .env file
+          echo "Creating .env file..."
+          cat > .env <<EOL
+          IMG_NAME=$IMAGE_NAME
+          ENVIRONMENT=development
+          DISCORD_DEV_BOT_TOKEN=$DISCORD_DEV_BOT_TOKEN
+          YOLO_URL=http://10.0.1.90:8081/predict
+          OLLAMA_URL=http://10.0.0.136:11434/api/chat
+          STATUS_SERVER_PORT=8443
           EOL
-  
-            echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
           
-            docker compose -f docker-compose.dev.yaml pull
-            docker compose -f docker-compose.dev.yaml up -d --remove-orphans
-          EOF
+          echo "Environment file created:"
+          cat .env
+          
+          # Login to Docker Hub
+          echo "Logging into Docker Hub..."
+          echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+          
+          # Stop existing containers
+          echo "Stopping existing containers..."
+          docker compose -f docker-compose.dev.yaml down --remove-orphans 2>/dev/null || true
+          
+          # Pull latest images
+          echo "Pulling Docker images..."
+          docker compose -f docker-compose.dev.yaml pull
+          
+          # Start services
+          echo "Starting services..."
+          docker compose -f docker-compose.dev.yaml up -d --remove-orphans
+          
+          # Verify deployment
+          echo "Verifying deployment..."
+          sleep 10
+          docker compose -f docker-compose.dev.yaml ps
+          
+          echo "=== Deployment completed successfully ==="
+          DEPLOY_SCRIPT
+          
+          # Make script executable and transfer it
+          chmod +x deploy_script.sh
+          
+          # Copy script to EC2 and execute
+          scp -i ~/.ssh/private_key deploy_script.sh ${{ secrets.EC2_USERNAME }}@${{ secrets.POLYBOT_EC2_HOST_DEV }}:~/
+          
+          # Execute deployment script on EC2
+          ssh polydev "
+            export IMAGE_NAME='$IMAGE_NAME'
+            export DISCORD_DEV_BOT_TOKEN='$DISCORD_DEV_BOT_TOKEN'
+            export DOCKERHUB_USERNAME='$DOCKERHUB_USERNAME'
+            export DOCKERHUB_TOKEN='$DOCKERHUB_TOKEN'
+            bash ~/deploy_script.sh
+          "
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -f ~/.ssh/private_key
+          rm -f deploy_script.sh
