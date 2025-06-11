@@ -103,10 +103,10 @@ jobs:
             YOLO_URL=http://10.0.1.90:8081/predict
             OLLAMA_URL=http://10.0.0.136:11434/api/chat
             STATUS_SERVER_PORT=8443
-            EOL
+          EOL
   
             echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
           
             docker compose -f docker-compose.dev.yaml pull
             docker compose -f docker-compose.dev.yaml up -d --remove-orphans
-            EOF
+          EOF
