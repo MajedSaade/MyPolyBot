@@ -17,7 +17,8 @@ jobs:
       image: ${{ steps.build.outputs.image }}
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       - name: Build and Push Docker Image
         id: build
@@ -25,14 +26,22 @@ jobs:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
-          docker login -u "$DOCKERHUB_USERNAME" -p "$DOCKERHUB_TOKEN"
-
-          img_name="$DOCKERHUB_USERNAME/polybot-dev:${{ github.run_number }}"
-          echo "image=$img_name" >> $GITHUB_ENV
-          echo "::set-output name=image::$img_name"
-
-          docker build --build-arg ENVIRONMENT=development -t $img_name .
-          docker push $img_name
+          # Login to Docker Hub
+          echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+          
+          # Create image name with run number
+          IMG_NAME="$DOCKERHUB_USERNAME/polybot-dev:${{ github.run_number }}"
+          echo "Building image: $IMG_NAME"
+          
+          # Build the Docker image
+          docker build --build-arg ENVIRONMENT=development -t "$IMG_NAME" .
+          
+          # Push the image
+          docker push "$IMG_NAME"
+          
+          # Output the image name for the next job
+          echo "image=$IMG_NAME" >> $GITHUB_OUTPUT
+          echo "Built and pushed image: $IMG_NAME"
 
   Deploy:
     needs: Build

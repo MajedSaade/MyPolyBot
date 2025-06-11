@@ -174,10 +174,10 @@ jobs:
           
           # Execute deployment script on EC2
           ssh polydev "
-            export IMAGE_NAME='$IMAGE_NAME'
-            export DISCORD_DEV_BOT_TOKEN='$DISCORD_DEV_BOT_TOKEN'
-            export DOCKERHUB_USERNAME='$DOCKERHUB_USERNAME'
-            export DOCKERHUB_TOKEN='$DOCKERHUB_TOKEN'
+            export IMAGE_NAME='${{ inputs.image }}'
+            export DISCORD_DEV_BOT_TOKEN='${{ secrets.DISCORD_BOT_TOKEN_DEV }}'
+            export DOCKERHUB_USERNAME='${{ secrets.DOCKERHUB_USERNAME }}'
+            export DOCKERHUB_TOKEN='${{ secrets.DOCKERHUB_TOKEN }}'
             bash ~/deploy_script.sh
           "
 
