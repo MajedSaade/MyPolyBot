@@ -60,6 +60,11 @@ jobs:
           ssh polydev <<'EOF'
             cd ~/${REPO_NAME} || { echo "ERROR: Repo not found"; exit 1; }
 
+            echo "Current directory:"
+            pwd
+            echo "Directory listing:"
+            ls -l
+
             # Install Docker CE + Compose v2 if not installed
             if ! command -v docker &> /dev/null; then
                 echo "Installing Docker CE + Compose v2..."
@@ -90,4 +95,4 @@ jobs:
             docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_TOKEN
             docker compose -f docker-compose.dev.yaml pull
             docker compose -f docker-compose.dev.yaml up -d --remove-orphans
-          EOF
+           EOF
