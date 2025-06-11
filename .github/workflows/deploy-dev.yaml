@@ -33,6 +33,9 @@ jobs:
         env:
           SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
         run: |
+          export EC2_HOST="${{ secrets.POLYBOT_EC2_HOST_DEV }}"
+          export EC2_USERNAME="${{ secrets.EC2_USERNAME }}"
+
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/private_key
           chmod 600 ~/.ssh/private_key
