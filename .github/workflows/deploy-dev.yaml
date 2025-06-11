@@ -32,81 +32,76 @@ jobs:
       - name: Configure SSH for Dev
         env:
           SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_HOST: ${{ secrets.POLYBOT_EC2_HOST_DEV }}
+          EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
         run: |
-          export EC2_HOST="${{ secrets.POLYBOT_EC2_HOST_DEV }}"
-          export EC2_USERNAME="${{ secrets.EC2_USERNAME }}"
-
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/private_key
           chmod 600 ~/.ssh/private_key
 
-          cat <<EOF | envsubst > ~/.ssh/config
+          cat > ~/.ssh/config <<EOF
           Host polydev
-          HostName \$EC2_HOST
-          User \$EC2_USERNAME
-          IdentityFile ~/.ssh/private_key
-          StrictHostKeyChecking no
-          EOF
+            HostName $EC2_HOST
+            User $EC2_USERNAME
+            IdentityFile ~/.ssh/private_key
+            StrictHostKeyChecking no
+            EOF
 
       - name: Deploy Docker Compose on Dev EC2
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-          DISCORD_DEV_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN_DEV }}
           REPO_NAME: MyPolyBot
         run: |
-          export EC2_HOST="${{ secrets.POLYBOT_EC2_HOST_DEV }}"
-          export EC2_USERNAME="${{ secrets.EC2_USERNAME }}"
-          export REPO_NAME="MyPolyBot"
-          export IMAGE_NAME="${{ inputs.image }}"
+          ssh polydev "IMAGE_NAME=${{ inputs.image }} DISCORD_DEV_BOT_TOKEN='${{ secrets.DISCORD_BOT_TOKEN_DEV }}' bash -s" <<'EOF'
+          set -e
 
-          ssh polydev <<EOF
-            set -e  # Fail fast if any command fails         
-          
-            echo "Removing existing repo directory if it exists..."
-            rm -rf ~/MyPolyBot
-          
-            echo "Cloning MyPolyBot repo (branch feature/containerization)..."
-            git clone --branch feature/containerization https://github.com/MajedSaade/MyPolyBot.git ~/MyPolyBot
+          echo "Removing existing repo directory if it exists..."
+          rm -rf ~/MyPolyBot
 
-            echo "Changing into repo directory..."
-            cd ~/MyPolyBot || { echo "ERROR: Repo not found after clone"; exit 1; }          
-          
-            echo "Current directory:"
-            pwd
-            echo "Directory listing:"
-            ls -l
+          echo "Cloning MyPolyBot repo (branch feature/containerization)..."
+          git clone --branch feature/containerization https://github.com/MajedSaade/MyPolyBot.git ~/MyPolyBot
 
-            # Install Docker CE + Compose v2 if not installed
-            if ! command -v docker &> /dev/null; then
-                echo "Installing Docker CE + Compose v2..."
-                sudo apt-get remove -y docker docker-engine docker.io containerd runc || true
-                sudo apt-get update
-                sudo apt-get install -y ca-certificates curl gnupg lsb-release
-                sudo mkdir -p /etc/apt/keyrings
-                curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-                echo \
-                  "deb [arch=\$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
-                  \$(lsb_release -cs) stable" | \
-                  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-                sudo apt-get update
-                sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-            else
-                echo "Docker is already installed"
-            fi
+          echo "Changing into repo directory..."
+          cd ~/MyPolyBot || { echo "ERROR: Repo not found after clone"; exit 1; }
 
-            echo "Creating .env file with image: $IMAGE_NAME"
-            cat > .env <<EOL
-            IMG_NAME=$IMAGE_NAME
-            ENVIRONMENT=development
-            DISCORD_DEV_BOT_TOKEN=$DISCORD_DEV_BOT_TOKEN
-            YOLO_URL=http://10.0.1.90:8081/predict
-            OLLAMA_URL=http://10.0.0.136:11434/api/chat
-            STATUS_SERVER_PORT=8443
-            EOL
-  
-            echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
-          
-            docker compose -f docker-compose.dev.yaml pull
-            docker compose -f docker-compose.dev.yaml up -d --remove-orphans
-            EOF
+          echo "Current directory:"
+          pwd
+          echo "Directory listing:"
+          ls -l
+
+          # Install Docker CE + Compose v2 if not installed
+          if ! command -v docker &> /dev/null; then
+              echo "Installing Docker CE + Compose v2..."
+              sudo apt-get remove -y docker docker-engine docker.io containerd runc || true
+              sudo apt-get update
+              sudo apt-get install -y ca-certificates curl gnupg lsb-release
+              sudo mkdir -p /etc/apt/keyrings
+              curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+              echo \
+                "deb [arch=\$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+                \$(lsb_release -cs) stable" | \
+                sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+              sudo apt-get update
+              sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+          else
+              echo "Docker is already installed"
+          fi
+
+          echo "Creating .env file with image: \$IMAGE_NAME"
+          cat > .env <<EOL
+          IMG_NAME=\$IMAGE_NAME
+          ENVIRONMENT=development
+          DISCORD_DEV_BOT_TOKEN=\$DISCORD_DEV_BOT_TOKEN
+          YOLO_URL=http://10.0.1.90:8081/predict
+          OLLAMA_URL=http://10.0.0.136:11434/api/chat
+          STATUS_SERVER_PORT=8443
+          EOL
+
+          echo "Logging in to Docker Hub..."
+          echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+
+          echo "Pulling latest image and starting containers..."
+          docker compose -f docker-compose.dev.yaml pull
+          docker compose -f docker-compose.dev.yaml up -d --remove-orphans
+          EOF
