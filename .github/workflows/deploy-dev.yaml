@@ -46,7 +46,7 @@ jobs:
           User \$EC2_USERNAME
           IdentityFile ~/.ssh/private_key
           StrictHostKeyChecking no
-         EOF
+          EOF
 
       - name: Deploy Docker Compose on Dev EC2
         env:
@@ -98,4 +98,4 @@ jobs:
 
             docker compose -f docker-compose.dev.yaml pull
             docker compose -f docker-compose.dev.yaml up -d --remove-orphans
-           EOF
+            EOF
