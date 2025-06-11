@@ -45,7 +45,7 @@ jobs:
             User $EC2_USERNAME
             IdentityFile ~/.ssh/private_key
             StrictHostKeyChecking no
-            EOF
+          EOF
 
       - name: Deploy Docker Compose on Dev EC2
         env:
