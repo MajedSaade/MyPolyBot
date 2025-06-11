@@ -1,4 +1,3 @@
-# .github/workflows/deploy-dev.yaml
 name: Polybot Deploy Dev
 
 on:
@@ -84,4 +83,4 @@ jobs:
             docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_TOKEN
             docker compose -f docker-compose.dev.yaml pull
             docker compose -f docker-compose.dev.yaml up -d --remove-orphans
-EOF
+          EOF
