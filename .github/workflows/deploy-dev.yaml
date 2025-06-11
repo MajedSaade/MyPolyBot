@@ -62,6 +62,12 @@ jobs:
           ssh polydev <<EOF
             cd ~/\$REPO_NAME || { echo "ERROR: Repo not found"; exit 1; }
 
+            git fetch origin
+            if git show-ref --verify --quiet refs/remotes/origin/feature/containerization; then
+              echo "Pulling from feature/containerization branch..."
+              git pull origin feature/containerization || { echo "ERROR: Failed to pull from feature/containerization"; exit 1; }
+            fi
+
             echo "Current directory:"
             pwd
             echo "Directory listing:"
