@@ -96,14 +96,14 @@ jobs:
             fi
 
             echo "Creating .env file with image: $IMAGE_NAME"
-            cat > .env << 'EOL'
+            cat > .env <<EOL
             IMG_NAME=$IMAGE_NAME
             ENVIRONMENT=development
-            DISCORD_DEV_BOT_TOKEN=${DISCORD_DEV_BOT_TOKEN}
+            DISCORD_DEV_BOT_TOKEN=$DISCORD_DEV_BOT_TOKEN
             YOLO_URL=http://10.0.1.90:8081/predict
             OLLAMA_URL=http://10.0.0.136:11434/api/chat
             STATUS_SERVER_PORT=8443
-           EOL
+            EOL
   
             echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
           
