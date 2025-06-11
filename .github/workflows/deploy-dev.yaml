@@ -60,7 +60,7 @@ jobs:
           export REPO_NAME="MyPolyBot"
           export IMAGE_NAME="${{ inputs.image }}"
 
-          ssh polydev <<EOF
+          ssh polydev "export IMAGE_NAME='${IMAGE_NAME}' DOCKERHUB_USERNAME='${DOCKERHUB_USERNAME}' DOCKERHUB_TOKEN='${DOCKERHUB_TOKEN}' DISCORD_DEV_BOT_TOKEN='${DISCORD_DEV_BOT_TOKEN}'; bash -s" <<'EOF'
             set -e  # Fail fast if any command fails         
 
             echo "Removing existing repo directory if it exists..."
