@@ -17,8 +17,7 @@ jobs:
       image: ${{ steps.build.outputs.image }}
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Build and Push Docker Image
         id: build
@@ -26,51 +25,14 @@ jobs:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
-          # Login to Docker Hub
-          echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
-          
-          # Create image name with run number
-          IMG_NAME="$DOCKERHUB_USERNAME/polybot-dev:${{ github.run_number }}"
-          echo "Building image: $IMG_NAME"
-          
-          # Verify Dockerfile exists
-          if [ ! -f "Dockerfile" ]; then
-            echo "ERROR: Dockerfile not found in repository root"
-            ls -la
-            exit 1
-          fi
-          
-          echo "Found Dockerfile, contents preview:"
-          head -10 Dockerfile
-          
-          # Build the Docker image
-          echo "Starting Docker build..."
-          docker build --build-arg ENVIRONMENT=development -t "$IMG_NAME" . --progress=plain
-          
-          # Verify the image was built
-          echo "Verifying built image:"
-          docker images | grep polybot-dev || echo "WARNING: Image not found in local images"
-          docker inspect "$IMG_NAME" --format='{{.Id}}' || echo "WARNING: Cannot inspect image"
-          
-          # Test the image can run (basic test)
-          echo "Testing image can start:"
-          docker run --rm "$IMG_NAME" --help 2>/dev/null || echo "WARNING: Image test failed (this might be normal)"
-          
-          # Push the image
-          echo "Pushing image to Docker Hub..."
-          docker push "$IMG_NAME"
-          
-          # Verify push was successful
-          echo "Verifying push was successful:"
-          docker pull "$IMG_NAME"
-          
-          # Output the image name for the next job
-          echo "image=$IMG_NAME" >> $GITHUB_OUTPUT
-          echo "✅ Successfully built and pushed image: $IMG_NAME"
-          
-          # Debug: Show what we're passing to the next job
-          echo "DEBUG: GITHUB_OUTPUT contents:"
-          cat $GITHUB_OUTPUT
+          docker login -u "$DOCKERHUB_USERNAME" -p "$DOCKERHUB_TOKEN"
+
+          img_name="$DOCKERHUB_USERNAME/polybot-dev:${{ github.run_number }}"
+          echo "image=$img_name" >> $GITHUB_ENV
+          echo "::set-output name=image::$img_name"
+
+          docker build --build-arg ENVIRONMENT=development -t $img_name .
+          docker push $img_name
 
   Deploy:
     needs: Build

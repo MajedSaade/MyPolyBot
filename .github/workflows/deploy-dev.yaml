@@ -1,10 +1,4 @@
-          # Execute deployment script on EC2 with image as parameter
-          ssh polydev "
-            export DISCORD_DEV_BOT_TOKEN='${{ secrets.DISCORD_BOT_TOKEN_DEV }}'
-            export DOCKERHUB_USERNAME='${{ secrets.DOCKERHUB_USERNAME }}'
-            export DOCKERHUB_TOKEN='${{ secrets.DOCKERHUB_TOKEN }}'
-            bash ~/deploy_script.sh '${{ inputs.image }}'
-          "# .github/workflows/deploy-dev.yaml
+# .github/workflows/deploy-dev.yaml
 name: Polybot Deploy Dev
 
 on:
@@ -32,18 +26,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Debug Input
-        run: |
-          echo "=== DEBUG: Checking inputs ==="
-          echo "Received image input: '${{ inputs.image }}'"
-          echo "Input length: ${#'${{ inputs.image }}'}"
-          if [ -z "${{ inputs.image }}" ]; then
-            echo "❌ ERROR: Image input is empty!"
-            exit 1
-          else
-            echo "✅ Image input received successfully"
-          fi
-
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -82,23 +64,8 @@ jobs:
           set -e
           
           echo "=== Starting deployment ==="
-          echo "Debug: All environment variables:"
-          env | grep -E "(IMAGE_NAME|DISCORD|DOCKERHUB)" || echo "No matching env vars found"
-          echo "Image from parameter: $1"
-          echo "Image from env: $IMAGE_NAME"
-          
-          # Use the first parameter if IMAGE_NAME is empty
-          if [ -z "$IMAGE_NAME" ] && [ -n "$1" ]; then
-              IMAGE_NAME="$1"
-              echo "Using image from parameter: $IMAGE_NAME"
-          fi
-          
-          if [ -z "$IMAGE_NAME" ]; then
-              echo "ERROR: IMAGE_NAME is empty!"
-              exit 1
-          fi
-          
-          echo "Final image name: $IMAGE_NAME"
+          echo "Image: $IMAGE_NAME"
+          echo "Discord Token: [REDACTED]"
           
           # Remove existing repo directory if it exists
           echo "Removing existing repo directory if it exists..."
