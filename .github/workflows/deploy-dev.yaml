@@ -46,23 +46,24 @@ jobs:
 
       - name: Deploy to EC2
         run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.POLYBOT_EC2_HOST_DEV }} << 'EOF'
-          
+          IMAGE="${{ inputs.image }}"  # Capture the input before SSH
+          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.POLYBOT_EC2_HOST_DEV }} << EOF
+
           # Install Docker if not present
           if ! command -v docker &> /dev/null; then
             sudo apt-get update
             sudo apt-get install -y docker.io docker-compose-plugin
             sudo systemctl start docker
             sudo systemctl enable docker
-            sudo usermod -aG docker $USER
+            sudo usermod -aG docker \$USER
           fi
-          
+
           # Navigate to deployment directory
           cd ~/polybot-deploy
-          
+
           # Create environment file with image from build workflow
           cat > .env << EOL
-          IMG_NAME=${{ inputs.image }}
+          IMG_NAME=$IMAGE
           ENVIRONMENT=development
           DISCORD_DEV_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN_DEV }}
           AWS_DEV_S3_BUCKET=majed-dev-bucket
@@ -71,38 +72,28 @@ jobs:
           OLLAMA_URL=http://10.0.0.136:11434/api/chat
           STATUS_SERVER_PORT=8443
           EOL
-          
+
           # Debug: Verify what we're working with
           echo "=== Deployment Debug Info ==="
-          echo "Image from build workflow: ${{ inputs.image }}"
+          echo "Image from build workflow: $IMAGE"
           echo "Contents of .env file:"
           cat .env
           echo "Contents of docker-compose.yml:"
           cat docker-compose.yml
           echo "=== End Debug Info ==="
-          cat > .env << EOL
-          IMG_NAME=${{ inputs.image }}
-          ENVIRONMENT=development
-          DISCORD_DEV_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN_DEV }}
-          AWS_DEV_S3_BUCKET=majed-dev-bucket
-          AWS_REGION=us-west-2
-          YOLO_URL=http://10.0.1.90:8081/predict
-          OLLAMA_URL=http://10.0.0.136:11434/api/chat
-          STATUS_SERVER_PORT=8443
-          EOL
-          
+
           # Stop existing containers
           sudo docker compose down --remove-orphans || true
-          
+
           # Login to Docker Hub
           echo "${{ secrets.DOCKERHUB_TOKEN }}" | sudo docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
-          
+
           # Pull latest image and start services (preserve environment)
           sudo -E docker compose pull
           sudo -E docker compose up -d
-          
+
           # Cleanup old images
           sudo docker image prune -f
-          
+
           echo "Deployment completed successfully!"
           EOF
