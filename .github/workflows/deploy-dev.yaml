@@ -36,8 +36,12 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ secrets.POLYBOT_EC2_HOST_DEV }} >> ~/.ssh/known_hosts
 
-      - name: Copy Docker Compose file to EC2
+      - name: Create deployment directory and copy files
         run: |
+          # Create the deployment directory first
+          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.POLYBOT_EC2_HOST_DEV }} "mkdir -p ~/polybot-deploy"
+          
+          # Now copy the docker-compose file
           scp -i ~/.ssh/id_rsa docker-compose.dev.yaml ${{ secrets.EC2_USERNAME }}@${{ secrets.POLYBOT_EC2_HOST_DEV }}:~/polybot-deploy/docker-compose.yml
 
       - name: Deploy to EC2
@@ -53,8 +57,7 @@ jobs:
             sudo usermod -aG docker $USER
           fi
           
-          # Create deployment directory
-          mkdir -p ~/polybot-deploy
+          # Navigate to deployment directory
           cd ~/polybot-deploy
           
           # Create environment file
