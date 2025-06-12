@@ -14,13 +14,12 @@ jobs:
   Build:
     runs-on: ubuntu-latest
     outputs:
-      image: ${{ steps.build.outputs.image }}
-
+      image: ${{ steps.build_img.outputs.img_name }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Build and Push Docker Image
-        id: build
+        id: build_img
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
