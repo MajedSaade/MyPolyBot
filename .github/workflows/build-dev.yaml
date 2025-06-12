@@ -27,7 +27,7 @@ jobs:
         run: |
           docker login -u "$DOCKERHUB_USERNAME" -p "$DOCKERHUB_TOKEN"
           
-          img_name="/polybot-dev:${{ github.run_number }}"
+          img_name="polybot-dev:${{ github.run_number }}"
           echo "Building image: $img_name"
           
           # Set output using the new GitHub Actions syntax
