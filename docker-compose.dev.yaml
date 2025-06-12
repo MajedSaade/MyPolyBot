@@ -1,6 +1,6 @@
 services:
   polybot:
-    image: majedsaade/polybot_build_dev
+    image: ${IMG_NAME}
     container_name: polybot-dev
     env_file: .env
     ports:
