@@ -20,9 +20,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy full source
 COPY . .
 
-# ARG for environment (default production)
-ARG ENVIRONMENT=production
-ENV ENVIRONMENT=$ENVIRONMENT
-
 # Command to run your app
 CMD ["python", "-m", "polybot.app"]

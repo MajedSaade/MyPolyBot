@@ -43,7 +43,7 @@ jobs:
 
       - name: Deploy to EC2
         run: |
-          IMG_NAME="${{ inputs.image }}"
+          IMG_NAME=majedsaade${{ inputs.image }}
           ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.POLYBOT_EC2_HOST_DEV }} << EOF
 
           # Install Docker if not present
