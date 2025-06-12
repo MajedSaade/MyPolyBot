@@ -24,8 +24,5 @@ COPY . .
 ARG ENVIRONMENT=production
 ENV ENVIRONMENT=$ENVIRONMENT
 
-# Expose the status server port (optional, not strictly required but good practice)
-EXPOSE 8443
-
 # Command to run your app
 CMD ["python", "app.py"]
