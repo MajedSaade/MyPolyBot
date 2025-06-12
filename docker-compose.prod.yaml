@@ -6,10 +6,10 @@ services:
     ports:
       - "8443:8443"
 
-  yoloservice:
-    image: yourdockerhubusername/yoloservice-prod:latest
-    ports:
-      - "8081:8081"
+  # yoloservice:
+  #   image: yourdockerhubusername/yoloservice-prod:latest
+  #   ports:
+  #     - "8081:8081"
 
   otelcol:
     image: otel/opentelemetry-collector-contrib:latest

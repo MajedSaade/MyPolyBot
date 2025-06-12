@@ -25,4 +25,4 @@ ARG ENVIRONMENT=production
 ENV ENVIRONMENT=$ENVIRONMENT
 
 # Command to run your app
-CMD ["python", "app.py"]
+CMD ["python", "-m", "polybot.app"]
