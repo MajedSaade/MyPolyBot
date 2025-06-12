@@ -1,4 +1,3 @@
-# .github/workflows/deploy-dev.yaml
 name: Polybot Deploy Dev
 
 on:
@@ -81,6 +80,9 @@ jobs:
 
           # Stop existing containers
           sudo docker compose down --remove-orphans || true
+
+          # Force remove old otelcol container if it exists
+          sudo docker rm -f polybot-deploy-otelcol-1 || true
 
           # Login to Docker Hub
           echo "${{ secrets.DOCKERHUB_TOKEN }}" | sudo docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
