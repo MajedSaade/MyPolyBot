@@ -43,7 +43,7 @@ jobs:
 
       - name: Deploy to EC2
         run: |
-          IMG_NAME=majedsaade${{ inputs.image }}
+          IMG_NAME="${{ inputs.image }}"
           ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.POLYBOT_EC2_HOST_DEV }} << EOF
 
           # Install Docker if not present
@@ -60,7 +60,7 @@ jobs:
 
           # Create environment file with image from build workflow
           cat > .env << EOL
-          IMG_NAME=\$IMAGE
+          IMG_NAME=majedsaade${{ inputs.image }}
           ENVIRONMENT=development
           DISCORD_DEV_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN_DEV }}
           AWS_DEV_S3_BUCKET=majed-dev-bucket
