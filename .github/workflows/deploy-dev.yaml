@@ -38,15 +38,12 @@ jobs:
 
       - name: Create deployment directory and copy files
         run: |
-          # Create the deployment directory first
           ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.POLYBOT_EC2_HOST_DEV }} "mkdir -p ~/polybot-deploy"
-          
-          # Now copy the docker-compose file
           scp -i ~/.ssh/id_rsa docker-compose.dev.yaml ${{ secrets.EC2_USERNAME }}@${{ secrets.POLYBOT_EC2_HOST_DEV }}:~/polybot-deploy/docker-compose.yml
 
       - name: Deploy to EC2
         run: |
-          IMAGE="${{ inputs.image }}"  # Capture the input before SSH
+          IMAGE="${{ inputs.image }}"
           ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.POLYBOT_EC2_HOST_DEV }} << EOF
 
           # Install Docker if not present
@@ -63,7 +60,7 @@ jobs:
 
           # Create environment file with image from build workflow
           cat > .env << EOL
-          IMG_NAME=$IMAGE
+          IMG_NAME=\$IMAGE
           ENVIRONMENT=development
           DISCORD_DEV_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN_DEV }}
           AWS_DEV_S3_BUCKET=majed-dev-bucket
@@ -75,7 +72,7 @@ jobs:
 
           # Debug: Verify what we're working with
           echo "=== Deployment Debug Info ==="
-          echo "Image from build workflow: $IMAGE"
+          echo "Image from build workflow: \$IMAGE"
           echo "Contents of .env file:"
           cat .env
           echo "Contents of docker-compose.yml:"
@@ -88,7 +85,7 @@ jobs:
           # Login to Docker Hub
           echo "${{ secrets.DOCKERHUB_TOKEN }}" | sudo docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
-          # Pull latest image and start services (preserve environment)
+          # Pull latest image and start services
           sudo -E docker compose pull
           sudo -E docker compose up -d
 
