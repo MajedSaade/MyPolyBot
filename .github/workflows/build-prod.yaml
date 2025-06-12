@@ -24,15 +24,26 @@ jobs:
         run: |
           docker login -u "$DOCKERHUB_USERNAME" -p "$DOCKERHUB_TOKEN"
 
-          img_name="$DOCKERHUB_USERNAME/polybot-prod:${{ github.run_number }}"
-          echo "image=$img_name" >> $GITHUB_ENV
-          echo "::set-output name=image::$img_name"
+          img_name="${DOCKERHUB_USERNAME}/polybot_build_prod:${{ github.run_number }}"
+          echo "Building Docker image: $img_name"
+
+          echo "image=$img_name" >> $GITHUB_OUTPUT
 
           docker build --build-arg ENVIRONMENT=production -t $img_name .
           docker push $img_name
+
+          echo "Successfully built and pushed: $img_name"
+  
 
   Deploy:
     needs: Build
     uses: ./.github/workflows/deploy-prod.yaml
     with:
       image: ${{ needs.Build.outputs.image }}
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+      POLYBOT_EC2_HOST: ${{ secrets.POLYBOT_EC2_HOST }}
+      EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
+      DISCORD_BOT_TOKEN_PROD: ${{ secrets.DISCORD_BOT_TOKEN_PROD }}
