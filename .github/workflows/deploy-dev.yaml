@@ -61,7 +61,7 @@ jobs:
           cd ~/polybot-deploy
           
           # Create environment file
-          cat > .env.dev << EOL
+          cat > .env << EOL
           IMG_NAME=${{ inputs.image }}
           ENVIRONMENT=development
           DISCORD_DEV_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN_DEV }}
