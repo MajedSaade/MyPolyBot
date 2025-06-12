@@ -1,9 +1,5 @@
 # Use minimal Python image
 FROM python:3.11-slim
-FROM majedsaade/polybot:latest
-FROM otel/opentelemetry-collector:latest
-
-
 
 # Set working directory
 WORKDIR /app
