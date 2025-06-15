@@ -37,7 +37,7 @@ jobs:
 
       - name: Create deployment directory and copy files
         run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.POLYBOT_EC2_HOST_DEV }} "mkdir -p ~/polybot-deploy"
+          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.POLYBOT_EC2_HOST_DEV }} "rm -rf ~/polybot-deploy/otel-collector-config.yaml && mkdir -p ~/polybot-deploy"
           scp -i ~/.ssh/id_rsa docker-compose.dev.yaml ${{ secrets.EC2_USERNAME }}@${{ secrets.POLYBOT_EC2_HOST_DEV }}:~/polybot-deploy/docker-compose.yml
           scp -i ~/.ssh/id_rsa otel-collector-config.yaml ${{ secrets.EC2_USERNAME }}@${{ secrets.POLYBOT_EC2_HOST_DEV }}:~/polybot-deploy/otel-collector-config.yaml
 
