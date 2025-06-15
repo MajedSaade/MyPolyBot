@@ -8,8 +8,7 @@ services:
 
   otelcol:
     image: otel/opentelemetry-collector-contrib:latest
-    container_name: yoloservice-deploy-otelcol-1
-    command: [ "--config=/etc/otelcol/config.yaml" ]
+    container_name: polybot-deploy-otelcol-1
     ports:
       - "8889:8889"
     volumes:
