@@ -6,7 +6,6 @@ services:
     ports:
       - "8443:8443"
 
-
     otelcol:
       image: otel/opentelemetry-collector-contrib:latest
       container_name: yoloservice-deploy-otelcol-1
@@ -20,7 +19,6 @@ services:
       environment:
         - HOST_PROC=/hostfs/proc
         - HOST_SYS=/hostfs/sys
-      command: [ "--config=/etc/otelcol/config.yaml" ]
       privileged: true
       restart: unless-stopped
 
