@@ -8,6 +8,8 @@ services:
 
   otelcol:
     image: otel/opentelemetry-collector-contrib:latest
+    container_name: yoloservice-deploy-otelcol-1
+    command: ["--config=/etc/otelcol/config.yaml"]
     ports:
       - "8889:8889"
     volumes:
