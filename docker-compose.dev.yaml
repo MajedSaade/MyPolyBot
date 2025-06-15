@@ -17,4 +17,3 @@ services:
     environment:
       - HOST_PROC=/hostfs/proc
       - HOST_SYS=/hostfs/sys
-    network_mode: host
