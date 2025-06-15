@@ -6,7 +6,7 @@ services:
     ports:
       - "8443:8443"
 
-  ootelcol:
+  otelcol:
     image: otel/opentelemetry-collector-contrib:latest
     container_name: polybot-deploy-otelcol-1
     command: [ "--config=/etc/otelcol/config.yaml" ]
