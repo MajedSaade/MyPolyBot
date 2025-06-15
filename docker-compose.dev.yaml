@@ -12,7 +12,7 @@ services:
     ports:
       - "8889:8889"
     volumes:
-      - ./config/otelcol:/etc/otelcol:ro
+      - ./otel-collector-config.yaml:/etc/otelcol/config.yaml:ro
       - /proc:/hostfs/proc:ro
       - /sys:/hostfs/sys:ro
       - /:/hostfs:ro
