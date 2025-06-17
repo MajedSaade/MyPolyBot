@@ -13,11 +13,18 @@ from opentelemetry import metrics
 
 #majed
 
-# Load environment variables from .env file
-load_dotenv()
+# Load correct .env file
+env_file = '.env.dev' if os.environ.get('ENVIRONMENT') == 'development' else '.env'
+load_dotenv(env_file)
 
-# Get the token from .env - try dev token first, then fall back to production token
-DISCORD_BOT_TOKEN = os.environ.get('DISCORD_DEV_BOT_TOKEN') or os.environ.get('DISCORD_BOT_TOKEN')
+# Now the rest of your code can read the right token automatically
+ENVIRONMENT = os.environ.get('ENVIRONMENT', 'production')
+
+if ENVIRONMENT == 'development':
+    DISCORD_BOT_TOKEN = os.environ.get('DISCORD_DEV_BOT_TOKEN')
+else:
+    DISCORD_BOT_TOKEN = os.environ.get('DISCORD_BOT_TOKEN')
+
 YOLO_URL = os.environ.get('YOLO_URL', 'http://10.0.1.90:8081/predict')
 OLLAMA_URL = os.environ.get('OLLAMA_URL', 'http://10.0.0.136:11434/api/chat')
 OLLAMA_MODEL = os.environ.get('OLLAMA_MODEL', 'gemma3:1b')
