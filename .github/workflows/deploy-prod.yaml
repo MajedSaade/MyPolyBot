@@ -44,7 +44,7 @@ jobs:
       - name: Deploy to EC2
         run: |
           IMG_NAME=majedsaade${{ inputs.image }}
-          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.POLYBOT_EC2_HOST_PROD }} << EOF
+          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.POLYBOT_EC2_HOST }} << EOF
 
           # Install Docker if not present
           if ! command -v docker &> /prod/null; then
