@@ -33,7 +33,7 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.POLYBOT_EC2_HOST_PROD }} >> ~/.ssh/known_hosts
+          ssh-keyscan -H ${{ secrets.POLYBOT_EC2_HOST }} >> ~/.ssh/known_hosts
 
       - name: Create deployment directory and copy files
         run: |
