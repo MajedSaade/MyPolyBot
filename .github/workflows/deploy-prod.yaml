@@ -1,5 +1,5 @@
 name: Polybot Deploy Prod
-#check
+
 on:
   workflow_call:
     inputs:
@@ -45,21 +45,47 @@ jobs:
         run: |
           IMG_NAME=majedsaade${{ inputs.image }}
           ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.POLYBOT_EC2_HOST }} << 'EOF'
-           # Check if Docker is installed and install if needed
-           if ! sudo docker --version &> /dev/null; then
-             echo "Docker not found. Installing Docker..."
+           # Function to check if Docker is working
+           check_docker() {
+             sudo docker --version &> /dev/null && sudo docker info &> /dev/null
+           }
+           
+           # Install Docker if not present or not working
+           if ! check_docker; then
+             echo "Docker not found or not working. Installing Docker..."
              sudo apt-get update
              sudo apt-get install -y docker.io docker-compose-plugin
              sudo systemctl start docker
              sudo systemctl enable docker
              sudo usermod -aG docker $USER
-             echo "Docker installation completed"
+             
+             # Wait for Docker to be ready
+             echo "Waiting for Docker to be ready..."
+             for i in {1..30}; do
+               if check_docker; then
+                 echo "Docker is ready!"
+                 break
+               fi
+               echo "Waiting for Docker... (attempt $i/30)"
+               sleep 2
+             done
+             
+             # Final check
+             if ! check_docker; then
+               echo "ERROR: Docker installation failed or is not ready"
+               exit 1
+             fi
            else
-             echo "Docker is already installed"
+             echo "Docker is already installed and working"
            fi
            
            # Ensure Docker service is running
            sudo systemctl start docker
+           
+           # Verify Docker is working before proceeding
+           echo "Verifying Docker installation..."
+           sudo docker --version
+           sudo docker info
            
            # Navigate to deployment directory
            cd ~/polybot-deploy
