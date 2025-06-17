@@ -1,4 +1,3 @@
-# .github/workflows/deploy-prod.yaml
 name: Polybot Deploy Prod
 
 on:
@@ -7,15 +6,19 @@ on:
       image:
         required: true
         type: string
-  workflow_dispatch:
-    inputs:
-      image:
+    secrets:
+      DOCKERHUB_USERNAME:
         required: true
-        type: string
-
-env:
-  REPO_URL: https://github.com/MajedSaade/MyPolyBot.git
-  REPO_NAME: MyPolyBot
+      DOCKERHUB_TOKEN:
+        required: true
+      EC2_SSH_KEY:
+        required: true
+      POLYBOT_EC2_HOST:
+        required: true
+      EC2_USERNAME:
+        required: true
+      DISCORD_BOT_TOKEN_PROD:
+        required: true
 
 jobs:
   deploy:
@@ -25,60 +28,72 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Configure SSH for Prod
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
-          EC2_HOST: ${{ secrets.POLYBOT_EC2_HOST }}
-          EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
+      - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
-          echo "$SSH_PRIVATE_KEY" > ~/.ssh/private_key
-          chmod 600 ~/.ssh/private_key
-          cat > ~/.ssh/config << EOF
-          Host poly
-            HostName $EC2_HOST
-            User $EC2_USERNAME
-            IdentityFile ~/.ssh/private_key
-            StrictHostKeyChecking no
-          EOF
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.POLYBOT_EC2_HOST_PROD }} >> ~/.ssh/known_hosts
 
-      - name: Deploy Docker Compose on Prod EC2
-        env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN_PROD }}
+      - name: Create deployment directory and copy files
         run: |
-          ssh poly << EOF
-            cd ~/${REPO_NAME} || { echo "ERROR: Repo not found"; exit 1; }
+          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.POLYBOT_EC2_HOST }} "rm -rf ~/polybot-deploy/otel-collector-config.yaml && mkdir -p ~/polybot-deploy"
+          scp -i ~/.ssh/id_rsa docker-compose.prod.yaml ${{ secrets.EC2_USERNAME }}@${{ secrets.POLYBOT_EC2_HOST }}:~/polybot-deploy/docker-compose.yml
+          scp -i ~/.ssh/id_rsa otel-collector-config.yaml ${{ secrets.EC2_USERNAME }}@${{ secrets.POLYBOT_EC2_HOST }}:~/polybot-deploy/otel-collector-config.yaml
 
-            # Install Docker CE + Compose v2 if not installed
-            if ! command -v docker &> /prod/null; then
-                echo "Installing Docker CE + Compose v2..."
-                sudo apt-get remove -y docker docker-engine docker.io containerd runc || true
-                sudo apt-get update
-                sudo apt-get install -y ca-certificates curl gnupg lsb-release
-                sudo mkdir -p /etc/apt/keyrings
-                curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-                echo \
-                  "deb [arch=\$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
-                  \$(lsb_release -cs) stable" | \
-                  sudo tee /etc/apt/sources.list.d/docker.list > /prod/null
-                sudo apt-get update
-                sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-            else
-                echo "Docker is already installed"
-            fi
+      - name: Deploy to EC2
+        run: |
+          IMG_NAME=majedsaade${{ inputs.image }}
+          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.POLYBOT_EC2_HOST_PROD }} << EOF
 
-            echo "
-            IMG_NAME=${{ inputs.image }}
-            ENVIRONMENT=production
-            DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
-            YOLO_URL=http://10.0.1.90:8081/predict
-            OLLAMA_URL=http://10.0.0.136:11434/api/chat
-            STATUS_SERVER_PORT=8443
-            " > .env
+          # Install Docker if not present
+          if ! command -v docker &> /prod/null; then
+            sudo apt-get update
+            sudo apt-get install -y docker.io docker-compose-plugin
+            sudo systemctl start docker
+            sudo systemctl enable docker
+            sudo usermod -aG docker \$USER
+          fi
 
-            docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_TOKEN
-            docker compose -f docker-compose.prod.yaml pull
-            docker compose -f docker-compose.prod.yaml up -d --remove-orphans
+          # Navigate to deployment directory
+          cd ~/polybot-deploy
+
+          # Create environment file with image from build workflow
+          cat > .env << EOL
+          IMG_NAME=majedsaade${{ inputs.image }}
+          ENVIRONMENT=production
+          DISCORD_PROD_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN_PROD }}
+          AWS_BOT_S3_BUCKET=majed-bot-bucket
+          AWS_REGION=us-west-2
+          YOLO_URL=http://10.0.1.90:8081/predict
+          OLLAMA_URL=http://10.0.0.136:11434/api/chat
+          STATUS_SERVER_PORT=8443
+          EOL
+
+          # Debug: Verify what we're working with
+          echo "=== Deployment Debug Info ==="
+          echo "Image from build workflow: \$IMAGE"
+          echo "Contents of .env file:"
+          cat .env
+          echo "Contents of docker-compose.yml:"
+          cat docker-compose.yml
+          echo "=== End Debug Info ==="
+
+          # Stop existing containers
+          sudo docker compose down --remove-orphans || true
+
+          # Force remove old otelcol container if it exists
+          sudo docker rm -f polybot-deploy-otelcol-1 || true
+
+          # Login to Docker Hub
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | sudo docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+
+          # Pull latest image and start services
+          sudo -E docker compose pull
+          sudo -E docker compose up -d
+
+          # Cleanup old images
+          sudo docker image prune -f
+
+          echo "Deployment completed successfully!"
           EOF
