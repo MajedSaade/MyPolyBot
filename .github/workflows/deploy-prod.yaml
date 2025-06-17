@@ -1,5 +1,5 @@
 name: Polybot Deploy Prod
-
+#check
 on:
   workflow_call:
     inputs:
@@ -45,64 +45,21 @@ jobs:
         run: |
           IMG_NAME=majedsaade${{ inputs.image }}
           ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.POLYBOT_EC2_HOST }} << 'EOF'
-           
-           echo "=== System Information ==="
-           cat /etc/os-release
-           uname -a
-           whoami
-           groups
-           
-           echo "=== Checking existing Docker installation ==="
-           which docker || echo "Docker binary not found"
-           docker --version 2>&1 || echo "Docker command failed"
-           sudo docker --version 2>&1 || echo "Sudo docker command failed"
-           
-           echo "=== Checking Docker service ==="
-           sudo systemctl status docker 2>&1 || echo "Docker service not found/running"
-           
-           echo "=== Installing/Updating Docker ==="
-           sudo apt-get update
-           sudo apt-get install -y docker.io docker-compose-plugin
-           
-           echo "=== Post-installation checks ==="
-           which docker
-           docker --version 2>&1 || echo "Docker command still failed"
-           
-           echo "=== Starting Docker service ==="
-           sudo systemctl start docker
-           sudo systemctl enable docker
-           
-           echo "=== Docker service status after start ==="
-           sudo systemctl status docker --no-pager
-           
-           echo "=== Docker daemon info ==="
-           sudo docker info 2>&1 || echo "Docker info failed"
-           
-           echo "=== Docker socket permissions ==="
-           ls -la /var/run/docker.sock 2>&1 || echo "Docker socket not found"
-           
-           echo "=== Adding user to docker group ==="
-           sudo usermod -aG docker $USER
-           echo "Current groups: $(groups)"
-           
-           echo "=== Testing Docker without sudo (will likely fail until logout/login) ==="
-           docker --version 2>&1 || echo "Expected failure - user needs to logout/login for group changes"
-           
-           echo "=== Final Docker test with sudo ==="
-           if sudo docker --version &> /dev/null && sudo docker info &> /dev/null; then
-             echo "✓ Docker is working with sudo"
-             DOCKER_READY=true
+           # Check if Docker is installed and install if needed
+           if ! sudo docker --version &> /dev/null; then
+             echo "Docker not found. Installing Docker..."
+             sudo apt-get update
+             sudo apt-get install -y docker.io docker-compose-plugin
+             sudo systemctl start docker
+             sudo systemctl enable docker
+             sudo usermod -aG docker $USER
+             echo "Docker installation completed"
            else
-             echo "✗ Docker is not working even with sudo"
-             DOCKER_READY=false
+             echo "Docker is already installed"
            fi
            
-           if [ "$DOCKER_READY" = false ]; then
-             echo "ERROR: Docker installation failed"
-             echo "=== System logs for debugging ==="
-             sudo journalctl -u docker --no-pager -n 20
-             exit 1
-           fi
+           # Ensure Docker service is running
+           sudo systemctl start docker
            
            # Navigate to deployment directory
            cd ~/polybot-deploy
