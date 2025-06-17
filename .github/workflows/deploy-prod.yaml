@@ -45,47 +45,64 @@ jobs:
         run: |
           IMG_NAME=majedsaade${{ inputs.image }}
           ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.POLYBOT_EC2_HOST }} << 'EOF'
-           # Function to check if Docker is working
-           check_docker() {
-             sudo docker --version &> /dev/null && sudo docker info &> /dev/null
-           }
            
-           # Install Docker if not present or not working
-           if ! check_docker; then
-             echo "Docker not found or not working. Installing Docker..."
-             sudo apt-get update
-             sudo apt-get install -y docker.io docker-compose-plugin
-             sudo systemctl start docker
-             sudo systemctl enable docker
-             sudo usermod -aG docker $USER
-             
-             # Wait for Docker to be ready
-             echo "Waiting for Docker to be ready..."
-             for i in {1..30}; do
-               if check_docker; then
-                 echo "Docker is ready!"
-                 break
-               fi
-               echo "Waiting for Docker... (attempt $i/30)"
-               sleep 2
-             done
-             
-             # Final check
-             if ! check_docker; then
-               echo "ERROR: Docker installation failed or is not ready"
-               exit 1
-             fi
+           echo "=== System Information ==="
+           cat /etc/os-release
+           uname -a
+           whoami
+           groups
+           
+           echo "=== Checking existing Docker installation ==="
+           which docker || echo "Docker binary not found"
+           docker --version 2>&1 || echo "Docker command failed"
+           sudo docker --version 2>&1 || echo "Sudo docker command failed"
+           
+           echo "=== Checking Docker service ==="
+           sudo systemctl status docker 2>&1 || echo "Docker service not found/running"
+           
+           echo "=== Installing/Updating Docker ==="
+           sudo apt-get update
+           sudo apt-get install -y docker.io docker-compose-plugin
+           
+           echo "=== Post-installation checks ==="
+           which docker
+           docker --version 2>&1 || echo "Docker command still failed"
+           
+           echo "=== Starting Docker service ==="
+           sudo systemctl start docker
+           sudo systemctl enable docker
+           
+           echo "=== Docker service status after start ==="
+           sudo systemctl status docker --no-pager
+           
+           echo "=== Docker daemon info ==="
+           sudo docker info 2>&1 || echo "Docker info failed"
+           
+           echo "=== Docker socket permissions ==="
+           ls -la /var/run/docker.sock 2>&1 || echo "Docker socket not found"
+           
+           echo "=== Adding user to docker group ==="
+           sudo usermod -aG docker $USER
+           echo "Current groups: $(groups)"
+           
+           echo "=== Testing Docker without sudo (will likely fail until logout/login) ==="
+           docker --version 2>&1 || echo "Expected failure - user needs to logout/login for group changes"
+           
+           echo "=== Final Docker test with sudo ==="
+           if sudo docker --version &> /dev/null && sudo docker info &> /dev/null; then
+             echo "✓ Docker is working with sudo"
+             DOCKER_READY=true
            else
-             echo "Docker is already installed and working"
+             echo "✗ Docker is not working even with sudo"
+             DOCKER_READY=false
            fi
            
-           # Ensure Docker service is running
-           sudo systemctl start docker
-           
-           # Verify Docker is working before proceeding
-           echo "Verifying Docker installation..."
-           sudo docker --version
-           sudo docker info
+           if [ "$DOCKER_READY" = false ]; then
+             echo "ERROR: Docker installation failed"
+             echo "=== System logs for debugging ==="
+             sudo journalctl -u docker --no-pager -n 20
+             exit 1
+           fi
            
            # Navigate to deployment directory
            cd ~/polybot-deploy
