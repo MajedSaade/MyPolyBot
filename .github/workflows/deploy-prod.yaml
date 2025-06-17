@@ -44,22 +44,28 @@ jobs:
       - name: Deploy to EC2
         run: |
           IMG_NAME=majedsaade${{ inputs.image }}
-          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.POLYBOT_EC2_HOST }} << EOF
-
-          # Install Docker if not present
-          if ! command -v docker &> /dev/null; then
-            sudo apt-get update
-            sudo apt-get install -y docker.io docker-compose-plugin
-            sudo systemctl start docker
-            sudo systemctl enable docker
-            sudo usermod -aG docker \$USER
-          fi
-
-          # Navigate to deployment directory
-          cd ~/polybot-deploy
-
-          # Create environment file with image from build workflow
-          cat > .env << EOL
+          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.POLYBOT_EC2_HOST }} << 'EOF'
+           # Check if Docker is installed and install if needed
+           if ! sudo docker --version &> /dev/null; then
+             echo "Docker not found. Installing Docker..."
+             sudo apt-get update
+             sudo apt-get install -y docker.io docker-compose-plugin
+             sudo systemctl start docker
+             sudo systemctl enable docker
+             sudo usermod -aG docker $USER
+             echo "Docker installation completed"
+           else
+             echo "Docker is already installed"
+           fi
+           
+           # Ensure Docker service is running
+           sudo systemctl start docker
+           
+           # Navigate to deployment directory
+           cd ~/polybot-deploy
+           
+           # Create environment file with image from build workflow
+           cat > .env << EOL
           IMG_NAME=majedsaade${{ inputs.image }}
           ENVIRONMENT=production
           DISCORD_PROD_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN_PROD }}
@@ -69,31 +75,31 @@ jobs:
           OLLAMA_URL=http://10.0.0.136:11434/api/chat
           STATUS_SERVER_PORT=8443
           EOL
-
-          # Debug: Verify what we're working with
-          echo "=== Deployment Debug Info ==="
-          echo "Image from build workflow: \$IMAGE"
-          echo "Contents of .env file:"
-          cat .env
-          echo "Contents of docker-compose.yml:"
-          cat docker-compose.yml
-          echo "=== End Debug Info ==="
-
-          # Stop existing containers
-          sudo docker compose down --remove-orphans || true
-
-          # Force remove old otelcol container if it exists
-          sudo docker rm -f polybot-deploy-otelcol-1 || true
-
-          # Login to Docker Hub
-          echo "${{ secrets.DOCKERHUB_TOKEN }}" | sudo docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
-
-          # Pull latest image and start services
-          sudo -E docker compose pull
-          sudo -E docker compose up -d
-
-          # Cleanup old images
-          sudo docker image prune -f
-
-          echo "Deployment completed successfully!"
+           
+           # Debug: Verify what we're working with
+           echo "=== Deployment Debug Info ==="
+           echo "Image from build workflow: $IMG_NAME"
+           echo "Contents of .env file:"
+           cat .env
+           echo "Contents of docker-compose.yml:"
+           cat docker-compose.yml
+           echo "=== End Debug Info ==="
+           
+           # Stop existing containers
+           sudo docker compose down --remove-orphans || true
+           
+           # Force remove old otelcol container if it exists
+           sudo docker rm -f polybot-deploy-otelcol-1 || true
+           
+           # Login to Docker Hub
+           echo "${{ secrets.DOCKERHUB_TOKEN }}" | sudo docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+           
+           # Pull latest image and start services
+           sudo -E docker compose pull
+           sudo -E docker compose up -d
+           
+           # Cleanup old images
+           sudo docker image prune -f
+           
+           echo "Deployment completed successfully!"
           EOF
