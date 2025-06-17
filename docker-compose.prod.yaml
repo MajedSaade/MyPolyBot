@@ -5,6 +5,8 @@ services:
     env_file: .env
     ports:
       - "8443:8443"
+    restart: unless-stopped
+
 
   otelcol:
     image: otel/opentelemetry-collector-contrib:latest
