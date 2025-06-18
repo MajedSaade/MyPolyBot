@@ -1,6 +1,6 @@
 services:
   polybot:
-    image: majedsaade/polybot_build_prod:latest
+    image: majedsaade/polybot_build_prod
     container_name: polybot-prod
     env_file: .env
     ports:
