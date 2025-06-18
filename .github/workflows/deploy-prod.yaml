@@ -43,7 +43,7 @@ jobs:
 
       - name: Deploy to EC2
         run: |
-          export IMG_NAME="${{ secrets.DOCKERHUB_USERNAME }}${{ inputs.image }}"
+          IMG_NAME=majedsaade${{ inputs.image }}
           ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.POLYBOT_EC2_HOST }} << EOF
 
           # Install Docker if not present
@@ -60,9 +60,9 @@ jobs:
 
           # Create environment file with image from build workflow
           cat > .env << EOL
-          IMG_NAME=${IMG_NAME}
+          IMG_NAME=majedsaade${{ inputs.image }}
           ENVIRONMENT=production
-          DISCORD_BOT_TOKEN_PROD=${{ secrets.DISCORD_BOT_TOKEN_PROD }}
+          DISCORD_PROD_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN_PROD }}
           AWS_BOT_S3_BUCKET=majed-bot-bucket
           AWS_REGION=us-west-2
           YOLO_URL=http://10.0.1.90:8081/predict
@@ -72,7 +72,7 @@ jobs:
 
           # Debug: Verify what we're working with
           echo "=== Deployment Debug Info ==="
-          echo "Image name: ${IMG_NAME}"
+          echo "Image from build workflow: \$IMAGE"
           echo "Contents of .env file:"
           cat .env
           echo "Contents of docker-compose.yml:"
