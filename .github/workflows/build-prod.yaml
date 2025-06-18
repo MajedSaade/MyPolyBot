@@ -24,10 +24,11 @@ jobs:
         run: |
           docker login -u "$DOCKERHUB_USERNAME" -p "$DOCKERHUB_TOKEN"
 
-          img_name="majedsaade/polybot_build_prod:${{ github.run_number }}"
+          img_name="${DOCKERHUB_USERNAME}/polybot_build_prod:${{ github.run_number }}"
+
           echo "Building Docker image: $img_name"
 
-          echo "image=$img_name" >> $GITHUB_OUTPUT
+          echo "image=/polybot_build_prod:${{ github.run_number }}" >> $GITHUB_OUTPUT
 
           docker build --build-arg ENVIRONMENT=production -t $img_name .
           docker push $img_name
