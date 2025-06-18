@@ -62,7 +62,7 @@ jobs:
           cat > .env << EOL
           IMG_NAME=majedsaade${{ inputs.image }}
           ENVIRONMENT=production
-          DISCORD_PROD_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN_PROD }}
+          DISCORD_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN_PROD }}
           AWS_BOT_S3_BUCKET=majed-bot-bucket
           AWS_REGION=us-west-2
           YOLO_URL=http://10.0.1.90:8081/predict
