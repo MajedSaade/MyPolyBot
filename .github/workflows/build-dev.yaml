@@ -30,7 +30,7 @@ jobs:
           img_name="${DOCKERHUB_USERNAME}/polybot_build_dev:${{ github.run_number }}"
           echo "Building Docker image: $img_name"
 
-          echo "image=$img_name" >> $GITHUB_OUTPUT
+          echo "image=/polybot_build_dev:${{ github.run_number }}" >> $GITHUB_OUTPUT
 
           docker build --build-arg ENVIRONMENT=development -t $img_name .
           docker push $img_name

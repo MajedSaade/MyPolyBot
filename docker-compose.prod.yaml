@@ -1,6 +1,6 @@
 services:
   polybot:
-    image: majedsaade/polybot_build_prod:latest
+    image : ${IMG_NAME:-majedsaade/polybot_build_prod:latest}
     container_name: polybot-prod
     env_file: .env
     ports:
@@ -9,7 +9,7 @@ services:
 
   otelcol:
     image: otel/opentelemetry-collector-contrib:latest
-    container_name: yoloservice-deploy-otelcol-1
+    container_name: polybot-deploy-otelcol-1
     ports:
       - "8889:8889"
     volumes:
@@ -23,5 +23,3 @@ services:
     command: [ "--config=/etc/otelcol/config.yaml" ]
     privileged: true
     restart: unless-stopped
-
-
