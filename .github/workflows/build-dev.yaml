@@ -5,9 +5,8 @@ on:
   push:
     branches:
       - dev
-      - feature/dev_setup
-      - feature/monitoring_dev_setup
-      - feature/containerization
+      - feature/**
+
   workflow_dispatch:
 
 jobs:
