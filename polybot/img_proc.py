@@ -23,7 +23,8 @@ class S3Manager:
     
     def __init__(self):
         self.aws_region = os.getenv('AWS_REGION', 'us-west-2')
-        self.bucket_name = os.getenv('AWS_DEV_S3_BUCKET')  # Only use dev bucket
+        # Try production bucket first, fall back to dev bucket
+        self.bucket_name = os.getenv('AWS_BOT_S3_BUCKET') or os.getenv('AWS_DEV_S3_BUCKET')
         self.s3_client = None
         
         # Initialize S3 client - will automatically use IAM role or AWS credentials
@@ -157,7 +158,7 @@ class S3Manager:
             if not self.aws_region:
                 missing.append("AWS_REGION")
             if not self.bucket_name:
-                missing.append("AWS_DEV_S3_BUCKET")
+                missing.append("AWS_BOT_S3_BUCKET or AWS_DEV_S3_BUCKET")
             logger.warning(f"Missing required AWS environment variables: {', '.join(missing)}")
         else:
             logger.warning("AWS credentials not found. Please attach IAM role to EC2 instance or configure AWS credentials.")
