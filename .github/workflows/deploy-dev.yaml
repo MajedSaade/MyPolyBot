@@ -35,51 +35,66 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ secrets.POLYBOT_EC2_HOST_DEV }} >> ~/.ssh/known_hosts
 
-      - name: Copy deployment files
+      - name: Create deployment directory and copy files
         run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.POLYBOT_EC2_HOST_DEV }} "mkdir -p ~/polybot-deploy"
+          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.POLYBOT_EC2_HOST_DEV }} "rm -rf ~/polybot-deploy/otel-collector-config.yaml && mkdir -p ~/polybot-deploy"
           scp -i ~/.ssh/id_rsa docker-compose.dev.yaml ${{ secrets.EC2_USERNAME }}@${{ secrets.POLYBOT_EC2_HOST_DEV }}:~/polybot-deploy/docker-compose.yml
           scp -i ~/.ssh/id_rsa otel-collector-config.yaml ${{ secrets.EC2_USERNAME }}@${{ secrets.POLYBOT_EC2_HOST_DEV }}:~/polybot-deploy/otel-collector-config.yaml
 
-      - name: Deploy on EC2
+      - name: Deploy to EC2
         run: |
+          # Set image name without space after equals and ensure proper formatting
+          export IMG_NAME="${{ secrets.DOCKERHUB_USERNAME }}${{ inputs.image }}"    
           ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.POLYBOT_EC2_HOST_DEV }} << EOF
-            set -e
 
-            # Install Docker and Compose plugin
-            if ! command -v docker &> /dev/null; then
-              sudo apt-get update
-              sudo apt-get install -y docker.io docker-compose-plugin
-              sudo systemctl start docker
-              sudo systemctl enable docker
-              sudo usermod -aG docker \$USER
-            fi
+          # Install Docker if not present
+          if ! command -v docker &> /dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y docker.io docker-compose-plugin
+            sudo systemctl start docker
+            sudo systemctl enable docker
+            sudo usermod -aG docker \$USER
+          fi
 
-            cd ~/polybot-deploy
+          # Navigate to deployment directory
+          cd ~/polybot-deploy
 
-            # Create .env file safely
-            printf '%s\n' \
-            "IMG_NAME=${IMG_NAME}" \
-            "ENVIRONMENT=development" \
-            "DISCORD_DEV_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN_DEV }}" \
-            "AWS_DEV_S3_BUCKET=majed-dev-bucket" \
-            "AWS_REGION=us-west-2" \
-            "YOLO_URL=http://10.0.0.66:8081/predict" \
-            "OLLAMA_URL=http://10.0.0.136:11434/api/chat" \
-            "STATUS_SERVER_PORT=8443" > .env
+          # Create environment file with image from build workflow
+          cat > .env << EOL
+          IMG_NAME=${IMG_NAME}
+          ENVIRONMENT=development
+          DISCORD_DEV_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN_DEV }}
+          AWS_DEV_S3_BUCKET=majed-dev-bucket
+          AWS_REGION=us-west-2
+          YOLO_URL=http://10.0.0.66:8081/predict
+          OLLAMA_URL=http://10.0.0.136:11434/api/chat
+          STATUS_SERVER_PORT=8443
+          EOL
 
-            # Login to Docker Hub
-            echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+          # Debug: Verify what we're working with
+          echo "=== Deployment Debug Info ==="
+          echo "Image from build workflow: \$IMAGE"
+          echo "Contents of .env file:"
+          cat .env
+          echo "Contents of docker-compose.yml:"
+          cat docker-compose.yml
+          echo "=== End Debug Info ==="
 
-            # Stop and remove old containers
-            sudo docker compose down --remove-orphans || true
-            sudo docker rm -f polybot-deploy-otelcol-1 || true
+          # Stop existing containers
+          sudo docker compose down --remove-orphans || true
 
-            # Pull and start containers
-            sudo docker compose --env-file .env pull
-            sudo docker compose --env-file .env up -d
+          # Force remove old otelcol container if it exists
+          sudo docker rm -f polybot-deploy-otelcol-1 || true
 
-            # Cleanup old images
-            sudo docker image prune -f
-            echo "✅ Deployment completed!"
-            EOF
+          # Login to Docker Hub
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | sudo docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+
+          # Pull latest image and start services
+          sudo -E docker compose pull
+          sudo -E docker compose up -d
+
+          # Cleanup old images
+          sudo docker image prune -f
+
+          echo "Deployment completed successfully!"
+          EOF
