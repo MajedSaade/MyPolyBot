@@ -72,14 +72,14 @@ jobs:
             echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
             # Stop and remove old containers
-            docker compose down --remove-orphans || true
-            docker rm -f polybot-deploy-otelcol-1 || true
+            sudo docker compose down --remove-orphans || true
+            sudo docker rm -f polybot-deploy-otelcol-1 || true
 
             # Pull and start containers
-            docker compose --env-file .env pull
-            docker compose --env-file .env up -d
+            sudo docker compose --env-file .env pull
+            sudo docker compose --env-file .env up -d
 
             # Cleanup old images
-            docker image prune -f
+            sudo docker image prune -f
             echo "✅ Deployment completed!"
             EOF
