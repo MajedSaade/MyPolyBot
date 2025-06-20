@@ -37,30 +37,42 @@ jobs:
 
       - name: Create deployment directory and copy files
         run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.POLYBOT_EC2_HOST_DEV }} "rm -rf ~/polybot-deploy/otel-collector-config.yaml && mkdir -p ~/polybot-deploy"
+          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.POLYBOT_EC2_HOST_DEV }} "mkdir -p ~/polybot-deploy"
           scp -i ~/.ssh/id_rsa docker-compose.dev.yaml ${{ secrets.EC2_USERNAME }}@${{ secrets.POLYBOT_EC2_HOST_DEV }}:~/polybot-deploy/docker-compose.yml
           scp -i ~/.ssh/id_rsa otel-collector-config.yaml ${{ secrets.EC2_USERNAME }}@${{ secrets.POLYBOT_EC2_HOST_DEV }}:~/polybot-deploy/otel-collector-config.yaml
 
-      - name: Deploy to EC2
+      - name: Install Docker on EC2
         run: |
-          # Set image name without space after equals and ensure proper formatting
-          export IMG_NAME="${{ secrets.DOCKERHUB_USERNAME }}${{ inputs.image }}"    
-          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.POLYBOT_EC2_HOST_DEV }} << EOF
-
-          # Install Docker if not present
+          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.POLYBOT_EC2_HOST_DEV }} << 'EOF'
+          # Check if Docker is installed
           if ! command -v docker &> /dev/null; then
+            echo "Installing Docker..."
             sudo apt-get update
-            sudo apt-get install -y docker.io docker-compose-plugin
+            sudo apt-get install -y apt-transport-https ca-certificates curl software-properties-common
+            curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+            sudo apt-get update
+            sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
             sudo systemctl start docker
             sudo systemctl enable docker
-            sudo usermod -aG docker \$USER
+            sudo usermod -aG docker $USER
+            echo "Docker installed successfully"
+          else
+            echo "Docker is already installed"
           fi
+          
+          # Verify Docker is running
+          sudo systemctl status docker --no-pager
+          docker --version
+          EOF
 
-          # Navigate to deployment directory
+      - name: Create environment file
+        run: |
+          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.POLYBOT_EC2_HOST_DEV }} << EOF
           cd ~/polybot-deploy
-
-          # Create environment file with image from build workflow
-          cat > .env << EOL
+          
+          # Create .env file
+          cat > .env << 'ENVEOF'
           IMG_NAME=${IMG_NAME}
           ENVIRONMENT=development
           DISCORD_DEV_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN_DEV }}
@@ -69,32 +81,54 @@ jobs:
           YOLO_URL=http://10.0.0.66:8081/predict
           OLLAMA_URL=http://10.0.0.136:11434/api/chat
           STATUS_SERVER_PORT=8443
-          EOL
-
-          # Debug: Verify what we're working with
-          echo "=== Deployment Debug Info ==="
-          echo "Image from build workflow: \$IMAGE"
-          echo "Contents of .env file:"
+          ENVEOF
+          
+          # Verify .env file was created correctly
+          echo "=== Environment file created ==="
           cat .env
-          echo "Contents of docker-compose.yml:"
+          echo "=== End of .env file ==="
+          EOF
+
+      - name: Deploy to EC2
+        run: |
+          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.POLYBOT_EC2_HOST_DEV }} << 'EOF'
+          cd ~/polybot-deploy
+          
+          # Debug: Show current directory and files
+          echo "=== Current directory: $(pwd) ==="
+          echo "=== Files in directory ==="
+          ls -la
+          echo "=== Docker Compose file ==="
           cat docker-compose.yml
+          echo "=== Environment file ==="
+          cat .env
           echo "=== End Debug Info ==="
-
+          
           # Stop existing containers
-          sudo docker compose down --remove-orphans || true
-
-          # Force remove old otelcol container if it exists
-          sudo docker rm -f polybot-deploy-otelcol-1 || true
-
+          sudo docker compose down --remove-orphans 2>/dev/null || true
+          
+          # Remove any stuck containers
+          sudo docker rm -f $(sudo docker ps -aq --filter "name=polybot") 2>/dev/null || true
+          
           # Login to Docker Hub
           echo "${{ secrets.DOCKERHUB_TOKEN }}" | sudo docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
-
-          # Pull latest image and start services
-          sudo -E docker compose pull
-          sudo -E docker compose up -d
-
+          
+          # Pull latest image
+          sudo docker compose pull
+          
+          # Start services with explicit env file
+          sudo docker compose --env-file .env up -d
+          
+          # Show running containers
+          echo "=== Running containers ==="
+          sudo docker ps
+          
+          # Show logs for debugging
+          echo "=== Recent logs ==="
+          sudo docker compose logs --tail=20
+          
           # Cleanup old images
           sudo docker image prune -f
-
+          
           echo "Deployment completed successfully!"
           EOF

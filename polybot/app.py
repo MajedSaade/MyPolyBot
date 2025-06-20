@@ -14,7 +14,7 @@ from opentelemetry import metrics
 #majed
 
 # Load correct .env file
-env_file = '.env.dev' if os.environ.get('ENVIRONMENT') == 'development' else '.env'
+env_file = '.env' if os.environ.get('ENVIRONMENT') == 'development' else '.env'
 load_dotenv(env_file)
 
 # Now the rest of your code can read the right token automatically
