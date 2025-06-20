@@ -18,10 +18,12 @@ ENVIRONMENT = os.environ.get('ENVIRONMENT', 'production')
 
 if ENVIRONMENT == 'development':
     DISCORD_BOT_TOKEN = os.environ.get('DISCORD_DEV_BOT_TOKEN')
+    YOLO_URL = os.environ.get('YOLO_URL', 'http://10.0.0.66:8081/predict')
 else:
     DISCORD_BOT_TOKEN = os.environ.get('DISCORD_BOT_TOKEN')
+    YOLO_URL = os.environ.get('YOLO_URL', 'http://10.0.1.90:8081/predict')
 
-YOLO_URL = os.environ.get('YOLO_URL', 'http://10.0.1.66:8081/predict')
+# Common settings
 OLLAMA_URL = os.environ.get('OLLAMA_URL', 'http://10.0.0.136:11434/api/chat')
 OLLAMA_MODEL = os.environ.get('OLLAMA_MODEL', 'gemma3:1b')
 STATUS_SERVER_PORT = int(os.environ.get('STATUS_SERVER_PORT', 8443))
