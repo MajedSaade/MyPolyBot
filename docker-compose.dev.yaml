@@ -5,6 +5,7 @@ services:
     env_file: .env
     ports:
       - "8443:8443"
+    network_mode: host  # This allows access to EC2 metadata service
     restart: unless-stopped
 
   otelcol:
