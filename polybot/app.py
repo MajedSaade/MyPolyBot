@@ -11,10 +11,10 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from opentelemetry import metrics
 
 # Load correct .env file
-env_file = '.env.dev' if os.environ.get('ENVIRONMENT') == 'development' else '.env'
+env_file = '.env'
 load_dotenv(env_file)
 
-ENVIRONMENT = os.environ.get('ENVIRONMENT', 'production')
+ENVIRONMENT = os.environ.get('ENVIRONMENT')
 
 if ENVIRONMENT == 'development':
     DISCORD_BOT_TOKEN = os.environ.get('DISCORD_DEV_BOT_TOKEN')
