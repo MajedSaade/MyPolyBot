@@ -44,21 +44,33 @@ jobs:
       - name: Deploy to EC2
         run: |
           # Set image name without space after equals and ensure proper formatting
-          export IMG_NAME="${{ secrets.DOCKERHUB_USERNAME }}${{ inputs.image }}"    
+          export IMG_NAME="${{ secrets.DOCKERHUB_USERNAME }}${{ inputs.image }}"
+          
           ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USERNAME }}@${{ secrets.POLYBOT_EC2_HOST_DEV }} << EOF
-
-          # Install Docker if not present
+          # Update Docker and install Docker Compose V2
           if ! command -v docker &> /dev/null; then
             sudo apt-get update
-            sudo apt-get install -y docker.io docker-compose-plugin
+            sudo apt-get install -y docker.io
             sudo systemctl start docker
             sudo systemctl enable docker
             sudo usermod -aG docker \$USER
           fi
-
+          
+          # Install Docker Compose V2 if not present
+          if ! docker compose version &> /dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y docker-compose-plugin
+          fi
+          
+          # Fallback to docker-compose V1 if V2 is not available
+          if ! docker compose version &> /dev/null && ! command -v docker-compose &> /dev/null; then
+            sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-\$(uname -s)-\$(uname -m)" -o /usr/local/bin/docker-compose
+            sudo chmod +x /usr/local/bin/docker-compose
+          fi
+          
           # Navigate to deployment directory
           cd ~/polybot-deploy
-
+          
           # Create environment file with image from build workflow
           cat > .env << EOL
           IMG_NAME=${IMG_NAME}
@@ -70,31 +82,43 @@ jobs:
           OLLAMA_URL=http://10.0.0.136:11434/api/chat
           STATUS_SERVER_PORT=8443
           EOL
-
+          
           # Debug: Verify what we're working with
           echo "=== Deployment Debug Info ==="
-          echo "Image from build workflow: \$IMAGE"
+          echo "Image from build workflow: ${IMG_NAME}"
           echo "Contents of .env file:"
           cat .env
           echo "Contents of docker-compose.yml:"
           cat docker-compose.yml
           echo "=== End Debug Info ==="
-
+          
+          # Check which compose command is available and use appropriate syntax
+          if docker compose version &> /dev/null; then
+            echo "Using Docker Compose V2"
+            COMPOSE_CMD="docker compose"
+          elif command -v docker-compose &> /dev/null; then
+            echo "Using Docker Compose V1"
+            COMPOSE_CMD="docker-compose"
+          else
+            echo "ERROR: No Docker Compose found!"
+            exit 1
+          fi
+          
           # Stop existing containers
-          sudo docker compose down --remove-orphans || true
-
+          sudo \$COMPOSE_CMD down || true
+          
           # Force remove old otelcol container if it exists
           sudo docker rm -f polybot-deploy-otelcol-1 || true
-
+          
           # Login to Docker Hub
           echo "${{ secrets.DOCKERHUB_TOKEN }}" | sudo docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
-
-          # Pull latest image and start services with explicit env file
-          sudo docker compose --env-file .env pull
-          sudo docker compose --env-file .env up -d
-
+          
+          # Pull latest image and start services
+          sudo \$COMPOSE_CMD pull
+          sudo \$COMPOSE_CMD up -d
+          
           # Cleanup old images
           sudo docker image prune -f
-
+          
           echo "Deployment completed successfully!"
           EOF
