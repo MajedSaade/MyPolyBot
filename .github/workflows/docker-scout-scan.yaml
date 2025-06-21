@@ -7,7 +7,7 @@ on:
 
 jobs:
   docker-scout:
-    name: Run Docker Scout Scan
+    name: Run Docker Scout CVE Check
     runs-on: ubuntu-latest
 
     permissions:
@@ -32,19 +32,18 @@ jobs:
         run: |
           docker build -t polybot:pr-${{ github.event.pull_request.number }} .
 
-      - name: Run Docker Scout scan using policy
+      - name: Run Docker Scout CVE check and fail on CRITICAL/HIGH
         id: scan
         run: |
-          docker scout scan polybot:pr-${{ github.event.pull_request.number }} \
-            --policy .docker/scout-policy.json \
+          docker scout cves polybot:pr-${{ github.event.pull_request.number }} \
             --format markdown > scout_report.md
 
-          if grep -q "non-compliant" scout_report.md; then
-            echo "❌ Policy violations found. Failing PR."
+          if grep -E 'Severity: (CRITICAL|HIGH)' scout_report.md; then
+            echo "❌ Found CRITICAL or HIGH vulnerabilities. Failing the PR."
             cat scout_report.md
             exit 1
           else
-            echo "✅ Passed Docker Scout policy check."
+            echo "✅ No CRITICAL or HIGH vulnerabilities found."
           fi
 
       - name: Post scan results as PR comment
