@@ -12,7 +12,7 @@ jobs:
 
     permissions:
       contents: read
-      pull-requests: write  # Needed to post PR comments
+      pull-requests: write
 
     steps:
       - name: Checkout code
@@ -35,7 +35,7 @@ jobs:
       - name: Run Docker Scout CVE check and fail on CRITICAL/HIGH
         id: scan
         run: |
-          docker scout cves polybot:pr-${{ github.event.pull_request.number }} > scout_report.txt
+          docker-scout cves polybot:pr-${{ github.event.pull_request.number }} > scout_report.txt
 
           if grep -E 'CRITICAL|HIGH' scout_report.txt; then
             echo "❌ Found CRITICAL or HIGH vulnerabilities. Failing the PR."
