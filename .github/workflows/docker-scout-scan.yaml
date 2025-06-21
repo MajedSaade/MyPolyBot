@@ -12,7 +12,7 @@ jobs:
 
     permissions:
       contents: read
-      pull-requests: write  # needed to post PR comments
+      pull-requests: write  # Needed to post PR comments
 
     steps:
       - name: Checkout code
@@ -32,19 +32,19 @@ jobs:
         run: |
           docker build -t polybot:pr-${{ github.event.pull_request.number }} .
 
-      - name: Run Docker Scout scan and fail on CRITICAL/HIGH
+      - name: Run Docker Scout scan using policy
         id: scan
         run: |
           docker scout scan polybot:pr-${{ github.event.pull_request.number }} \
-            --only-severities=critical,high \
+            --policy .docker/scout-policy.json \
             --format markdown > scout_report.md
 
-          if grep -q "CRITICAL\|HIGH" scout_report.md; then
-            echo "❌ Critical or high vulnerabilities found. Failing PR."
+          if grep -q "non-compliant" scout_report.md; then
+            echo "❌ Policy violations found. Failing PR."
             cat scout_report.md
             exit 1
           else
-            echo "✅ No critical or high vulnerabilities found."
+            echo "✅ Passed Docker Scout policy check."
           fi
 
       - name: Post scan results as PR comment
