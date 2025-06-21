@@ -35,12 +35,11 @@ jobs:
       - name: Run Docker Scout CVE check and fail on CRITICAL/HIGH
         id: scan
         run: |
-          docker scout cves polybot:pr-${{ github.event.pull_request.number }} \
-            --format markdown > scout_report.md
+          docker scout cves polybot:pr-${{ github.event.pull_request.number }} > scout_report.txt
 
-          if grep -E 'Severity: (CRITICAL|HIGH)' scout_report.md; then
+          if grep -E 'CRITICAL|HIGH' scout_report.txt; then
             echo "❌ Found CRITICAL or HIGH vulnerabilities. Failing the PR."
-            cat scout_report.md
+            cat scout_report.txt
             exit 1
           else
             echo "✅ No CRITICAL or HIGH vulnerabilities found."
@@ -49,4 +48,4 @@ jobs:
       - name: Post scan results as PR comment
         uses: marocchino/sticky-pull-request-comment@v2
         with:
-          path: scout_report.md
+          path: scout_report.txt
