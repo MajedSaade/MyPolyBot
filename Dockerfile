@@ -1,5 +1,5 @@
 # Use minimal Python image
-FROM python:3.11-alipne
+FROM python:3.11-alpine
 
 # Set working directory
 WORKDIR /app
