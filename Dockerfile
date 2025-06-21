@@ -1,26 +1,25 @@
-# Use minimal Python image
-FROM python:3.11-slim
+# Use minimal Python image (Alpine variant)
+FROM python:3.11-alpine
 
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies (required for some packages, TLS, etc.)
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Install system dependencies (for Python packages and runtime)
+RUN apk add --no-cache \
     gcc \
+    musl-dev \
     libffi-dev \
-    libssl-dev \
-    libjpeg-dev \
-    zlib1g-dev \
-    && rm -rf /var/lib/apt/lists/*
+    libressl-dev \
+    jpeg-dev \
+    zlib-dev \
+    freetype-dev \
+    libpng-dev
 
-# 🛡️ Workaround: Disable vulnerable pam_namespace module (CVE-2025-6020)
-RUN sed -i '/pam_namespace.so/d' /etc/pam.d/common-session || true
-
-# Copy requirements and install
+# Copy requirements and install Python dependencies
 COPY polybot/requirements.txt requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy full source
+# Copy full source code
 COPY . .
 
 # Command to run your app
