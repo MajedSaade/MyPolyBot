@@ -12,7 +12,7 @@ jobs:
 
     permissions:
       contents: read
-      pull-requests: write # Needed to write PR comments
+      pull-requests: write  # needed to post PR comments
 
     steps:
       - name: Checkout code
@@ -32,15 +32,22 @@ jobs:
         run: |
           docker build -t polybot:pr-${{ github.event.pull_request.number }} .
 
-      - name: Run Docker Scout scan
+      - name: Run Docker Scout scan and fail on CRITICAL/HIGH
         id: scan
         run: |
-          docker scout cves polybot:pr-${{ github.event.pull_request.number }} \
-            --exit-code --only-severities=critical,high \
+          docker scout scan polybot:pr-${{ github.event.pull_request.number }} \
+            --only-severities=critical,high \
             --format markdown > scout_report.md
+
+          if grep -q "CRITICAL\|HIGH" scout_report.md; then
+            echo "❌ Critical or high vulnerabilities found. Failing PR."
+            cat scout_report.md
+            exit 1
+          else
+            echo "✅ No critical or high vulnerabilities found."
+          fi
 
       - name: Post scan results as PR comment
         uses: marocchino/sticky-pull-request-comment@v2
         with:
           path: scout_report.md
-
