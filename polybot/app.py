@@ -4,76 +4,67 @@ import threading
 from dotenv import load_dotenv
 from polybot.bot import ImageProcessingBot
 from loguru import logger
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 import uvicorn
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from prometheus_fastapi_instrumentator import Instrumentator
 from opentelemetry import metrics
 
-
-#majed
-
 # Load correct .env file
-env_file = '.env.dev' if os.environ.get('ENVIRONMENT') == 'development' else '.env'
+env_file = '.env'
 load_dotenv(env_file)
 
-# Now the rest of your code can read the right token automatically
-ENVIRONMENT = os.environ.get('ENVIRONMENT', 'production')
+ENVIRONMENT = os.environ.get('ENVIRONMENT')
 
 if ENVIRONMENT == 'development':
     DISCORD_BOT_TOKEN = os.environ.get('DISCORD_DEV_BOT_TOKEN')
+    YOLO_URL = os.environ.get('YOLO_URL', 'http://10.0.0.66:8081/predict')
 else:
     DISCORD_BOT_TOKEN = os.environ.get('DISCORD_BOT_TOKEN')
+    YOLO_URL = os.environ.get('YOLO_URL', 'http://10.0.1.90:8081/predict')
 
-YOLO_URL = os.environ.get('YOLO_URL', 'http://10.0.1.90:8081/predict')
+# Common settings
 OLLAMA_URL = os.environ.get('OLLAMA_URL', 'http://10.0.0.136:11434/api/chat')
 OLLAMA_MODEL = os.environ.get('OLLAMA_MODEL', 'gemma3:1b')
 STATUS_SERVER_PORT = int(os.environ.get('STATUS_SERVER_PORT', 8443))
 
-# Create FastAPI app for health checks
+# Create FastAPI app
 app = FastAPI()
 
-# Register Prometheus instrumentation
+# Instrumentation
 Instrumentator().instrument(app).expose(app)
+FastAPIInstrumentor.instrument_app(app)
 
-
-# Create custom meter
 meter = metrics.get_meter(__name__)
-
-# Example custom counter → you can use this in your bot logic
 polybot_requests_counter = meter.create_counter("polybot_requests_total")
-
-
-
-
-
-"For MyPolyBot check if good , old V"
 
 @app.get("/")
 def health_check():
     return {"status": "ok"}
 
+@app.post("/predictions/{prediction_id}")
+async def receive_prediction(prediction_id: str, request: Request):
+    data = await request.json()
+    logger.info(f"✅ Received prediction callback for ID {prediction_id}: {data}")
+    # Optional: send result to Discord user/chat here
+    return {"status": "received"}
 
 def run_status_server():
-    """Run the FastAPI status server in a separate thread"""
     logger.info(f"Starting status server on port {STATUS_SERVER_PORT}")
     try:
         uvicorn.run(app, host="0.0.0.0", port=STATUS_SERVER_PORT, log_level="info")
     except Exception as e:
         logger.error(f"Error running status server: {e}")
 
-
 async def main():
     if not DISCORD_BOT_TOKEN:
         logger.error("DISCORD_BOT_TOKEN environment variable not set")
         return
 
-    # Start the status server in a separate thread
     status_thread = threading.Thread(target=run_status_server, daemon=True)
     status_thread.start()
     logger.info("Status server thread started")
 
-    # Use ImageProcessingBot with YOLO URL and Ollama URL
     bot = ImageProcessingBot(DISCORD_BOT_TOKEN, YOLO_URL, OLLAMA_URL)
     logger.info("Starting Discord bot...")
 
@@ -83,7 +74,6 @@ async def main():
         logger.error(f"Error starting Discord bot: {e}")
     finally:
         logger.info("Discord bot stopped")
-
 
 if __name__ == "__main__":
     asyncio.run(main())
