@@ -66,7 +66,7 @@ jobs:
           DISCORD_DEV_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN_DEV }}
           AWS_DEV_S3_BUCKET=majed-dev-bucket
           AWS_REGION=us-west-2
-          YOLO_URL=http://10.0.1.90:8081/predict
+          YOLO_URL=http://10.0.0.66:8081/predict
           OLLAMA_URL=http://10.0.0.136:11434/api/chat
           STATUS_SERVER_PORT=8443
           EOL

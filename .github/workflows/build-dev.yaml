@@ -8,6 +8,7 @@ on:
       - feature/dev_setup
       - feature/monitoring_dev_setup
       - feature/containerization
+      - feature/dynamodb
   workflow_dispatch:
 
 jobs:
